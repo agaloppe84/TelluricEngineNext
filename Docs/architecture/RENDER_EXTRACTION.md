@@ -69,7 +69,7 @@ This remains a render contract:
 - no input controls;
 - no platform view state.
 
-## Metal Remains Future-Only
+## Metal Remains Outside Extraction
 
 `TelluricRenderExtraction` must not import:
 
@@ -81,7 +81,9 @@ AppKit
 TelluricRenderMetal
 ```
 
-A future `TelluricRenderMetal` backend may consume the extracted `RenderSnapshot`, but GPU resources, shaders, command queues, windows, and render loops remain outside this phase.
+`TelluricRenderMetal` can consume the extracted `RenderSnapshot` as a backend client. Phase 13 can prepare extracted debug chunk boundary lines into CPU-side Metal vertices and, when a device exists, a Metal vertex buffer.
+
+Extraction still does not allocate GPU resources, compile shaders, encode command buffers, create windows, or run a render loop. The bridge only produces backend-neutral render contracts.
 
 ## Not Implemented In Phase 9
 

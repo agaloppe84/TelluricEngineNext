@@ -51,7 +51,7 @@ TelluricRuntime
 TelluricRenderMetal
 ```
 
-Phase 12 introduces the first `TelluricRenderMetal` skeleton. It consumes `RenderSnapshot`, attempts device and command queue creation, and reports unsupported render contents explicitly. It does not draw yet, does not present a drawable, and does not create app/window/view code.
+Phase 12 introduced the first `TelluricRenderMetal` skeleton. Phase 13 adds backend-level preparation for `DebugLine` primitives: CPU conversion into ordered scalar vertices, validation diagnostics, and optional Metal buffer creation when a device exists. It does not draw yet, does not present a drawable, and does not create app/window/view code.
 
 Future Metal backend phases may translate resource identifiers into backend resources and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
 
@@ -105,7 +105,7 @@ Telluric.RenderSnapshot.v1
 
 The hash includes ordered version/frame/camera fields, ordered renderable instances, and ordered debug primitives. It uses `StableHasher`, not Swift's built-in `Hasher`.
 
-## Phase 12 Metal Backend Skeleton
+## Metal Backend Skeleton
 
 The backend skeleton currently supports:
 
@@ -113,8 +113,11 @@ The backend skeleton currently supports:
 - Metal availability and device capability reports;
 - command queue creation when a device exists;
 - accepting `RenderSnapshot`;
+- debug line CPU conversion and Metal buffer preparation;
 - deterministic frame results;
-- explicit unsupported diagnostics for renderable instances, texture/material binding, debug lines, debug points, debug labels, and drawable presentation.
+- explicit unsupported diagnostics for renderable instances, texture/material binding, debug points, debug labels, and drawable presentation.
+
+Debug line preparation is not the same as visible debug line rendering. There is still no shader library, render pipeline state, render pass, drawable, window, or presentation path.
 
 See `Docs/architecture/METAL_BACKEND.md`.
 

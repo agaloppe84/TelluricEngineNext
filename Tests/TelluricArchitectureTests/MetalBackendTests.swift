@@ -53,6 +53,7 @@ final class MetalBackendTests: XCTestCase {
         case let .success(context):
             XCTAssertTrue(context.capabilities.isMetalAvailable)
             XCTAssertTrue(context.capabilities.hasCommandQueue)
+            XCTAssertTrue(context.capabilities.supportsDebugLinePreparation)
             XCTAssertNotNil(context.capabilities.deviceName)
 
         case let .failure(error):
@@ -76,12 +77,122 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertEqual(first.unsupportedRenderableInstanceCount, 0)
         XCTAssertEqual(first.unsupportedTextureReferenceCount, 0)
         XCTAssertEqual(first.unsupportedDebugLineCount, 0)
+        XCTAssertEqual(first.preparedDebugLineCount, 0)
+        XCTAssertEqual(first.preparedDebugLineVertexCount, 0)
+        XCTAssertEqual(first.preparedDebugLineBufferByteLength, 0)
         XCTAssertEqual(first.unsupportedDebugPointCount, 0)
         XCTAssertEqual(first.unsupportedDebugLabelCount, 0)
         XCTAssertEqual(first.success, backend.isAvailable)
     }
 
-    func testRenderingSnapshotWithDebugPrimitivesReturnsUnsupportedDiagnostics() {
+    func testCPUConversionOfOneDebugLineProducesTwoVertices() {
+        let line = DebugLine(
+            start: Float3(x: -1, y: 2, z: 3),
+            end: Float3(x: 4, y: 5, z: -6),
+            color: RenderColor(red: 0.25, green: 0.5, blue: 0.75, alpha: 1)
+        )
+
+        let batch = MetalDebugLinePipeline.makeBatch(lines: [line])
+
+        XCTAssertTrue(batch.success)
+        XCTAssertEqual(batch.sourceLineCount, 1)
+        XCTAssertEqual(batch.validLineCount, 1)
+        XCTAssertEqual(batch.vertexCount, 2)
+        XCTAssertEqual(batch.vertices[0].positionX, -1)
+        XCTAssertEqual(batch.vertices[0].positionY, 2)
+        XCTAssertEqual(batch.vertices[0].positionZ, 3)
+        XCTAssertEqual(batch.vertices[1].positionX, 4)
+        XCTAssertEqual(batch.vertices[1].positionY, 5)
+        XCTAssertEqual(batch.vertices[1].positionZ, -6)
+        XCTAssertEqual(batch.vertices[0].red, 0.25)
+        XCTAssertEqual(batch.vertices[0].green, 0.5)
+        XCTAssertEqual(batch.vertices[0].blue, 0.75)
+        XCTAssertEqual(batch.vertices[0].alpha, 1)
+        XCTAssertEqual(batch.vertices[1].red, 0.25)
+        XCTAssertEqual(batch.vertices[1].green, 0.5)
+        XCTAssertEqual(batch.vertices[1].blue, 0.75)
+        XCTAssertEqual(batch.vertices[1].alpha, 1)
+    }
+
+    func testCPUConversionOfMultipleLinesPreservesDeterministicOrder() {
+        let first = DebugLine(
+            start: Float3(x: 10, y: 0, z: 0),
+            end: Float3(x: 11, y: 0, z: 0),
+            color: .red
+        )
+        let second = DebugLine(
+            start: Float3(x: -3, y: 1, z: 2),
+            end: Float3(x: -4, y: 1, z: 2),
+            color: .green
+        )
+
+        let batch = MetalDebugLinePipeline.makeBatch(lines: [first, second])
+
+        XCTAssertTrue(batch.success)
+        XCTAssertEqual(batch.vertices.map(\.positionX), [10, 11, -3, -4])
+        XCTAssertEqual(batch.vertices.map(\.red), [1, 1, 0, 0])
+        XCTAssertEqual(batch.vertices.map(\.green), [0, 0, 1, 1])
+    }
+
+    func testInvalidDebugLineCoordinatesProduceDiagnostics() {
+        let batch = MetalDebugLinePipeline.makeBatch(lines: [
+            DebugLine(start: Float3(x: .nan, y: 0, z: 0), end: Float3(x: 1, y: 0, z: 0), color: .white),
+            DebugLine(start: Float3(x: 0, y: 0, z: 0), end: Float3(x: .infinity, y: 0, z: 0), color: .white),
+        ])
+
+        XCTAssertFalse(batch.success)
+        XCTAssertEqual(batch.sourceLineCount, 2)
+        XCTAssertEqual(batch.validLineCount, 0)
+        XCTAssertEqual(batch.vertexCount, 0)
+        XCTAssertEqual(batch.diagnostics.count(.error), 2)
+        XCTAssertTrue(batch.diagnostics.messages.allSatisfy {
+            $0.code.rawValue == "render.metal.debug_line.invalid"
+        })
+    }
+
+    func testEmptyDebugLineSetProducesEmptyBatchAndSucceeds() {
+        let batch = MetalDebugLinePipeline.makeBatch(lines: [])
+        let buffer = MetalDebugLinePipeline.makeBuffer(batch: batch, context: nil)
+
+        XCTAssertTrue(batch.success)
+        XCTAssertEqual(batch.sourceLineCount, 0)
+        XCTAssertEqual(batch.vertexCount, 0)
+        XCTAssertTrue(buffer.success)
+        XCTAssertFalse(buffer.hasMetalBuffer)
+        XCTAssertEqual(buffer.byteLength, 0)
+        XCTAssertEqual(buffer.diagnostics.messages, [])
+    }
+
+    func testDebugLineBufferCreationHandlesMetalAvailability() {
+        let batch = MetalDebugLinePipeline.makeBatch(lines: [
+            DebugLine(start: .zero, end: Float3(x: 1, y: 0, z: 0), color: .blue),
+        ])
+
+        switch MetalDeviceContext.makeResult() {
+        case let .success(context):
+            let buffer = MetalDebugLinePipeline.makeBuffer(batch: batch, context: context)
+
+            XCTAssertTrue(buffer.success)
+            XCTAssertTrue(buffer.hasMetalBuffer)
+            XCTAssertEqual(buffer.validLineCount, 1)
+            XCTAssertEqual(buffer.vertexCount, 2)
+            XCTAssertGreaterThan(buffer.byteLength, 0)
+
+        case .failure:
+            let buffer = MetalDebugLinePipeline.makeBuffer(batch: batch, context: nil)
+
+            XCTAssertFalse(buffer.success)
+            XCTAssertFalse(buffer.hasMetalBuffer)
+            XCTAssertEqual(buffer.validLineCount, 1)
+            XCTAssertEqual(buffer.vertexCount, 2)
+            XCTAssertGreaterThan(buffer.byteLength, 0)
+            XCTAssertTrue(buffer.diagnostics.messages.contains {
+                $0.code.rawValue == "render.metal.debug_line.buffer_unavailable"
+            })
+        }
+    }
+
+    func testRenderingSnapshotWithDebugPrimitivesPreparesDebugLinesAndReportsOtherUnsupportedDiagnostics() {
         let backend = MetalRenderBackend()
         let snapshot = makeSnapshot(
             instances: [
@@ -113,12 +224,15 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.unsupportedRenderableInstanceCount, 1)
         XCTAssertEqual(result.unsupportedTextureReferenceCount, 2)
-        XCTAssertEqual(result.unsupportedDebugLineCount, 1)
+        XCTAssertEqual(result.unsupportedDebugLineCount, 0)
+        XCTAssertEqual(result.preparedDebugLineCount, 1)
+        XCTAssertEqual(result.preparedDebugLineVertexCount, 2)
+        XCTAssertGreaterThan(result.preparedDebugLineBufferByteLength, 0)
         XCTAssertEqual(result.unsupportedDebugPointCount, 1)
         XCTAssertEqual(result.unsupportedDebugLabelCount, 1)
         XCTAssertTrue(diagnosticCodes.contains("render.metal.unsupported.renderable_instances"))
         XCTAssertTrue(diagnosticCodes.contains("render.metal.unsupported.texture_references"))
-        XCTAssertTrue(diagnosticCodes.contains("render.metal.unsupported.debug_lines"))
+        XCTAssertFalse(diagnosticCodes.contains("render.metal.unsupported.debug_lines"))
         XCTAssertTrue(diagnosticCodes.contains("render.metal.unsupported.debug_points"))
         XCTAssertTrue(diagnosticCodes.contains("render.metal.unsupported.debug_labels"))
     }
@@ -142,6 +256,16 @@ final class MetalBackendTests: XCTestCase {
             let source = root.appendingPathComponent("Sources").appendingPathComponent(target)
             try assertNoSwiftSourceLine(under: source, containsAnyImportOf: ["Metal", "MetalKit", "TelluricRenderMetal"])
         }
+    }
+
+    func testRenderMetalDoesNotImportAppWindowOrMetalKitFrameworks() throws {
+        let root = try packageRoot()
+        let source = root.appendingPathComponent("Sources").appendingPathComponent("TelluricRenderMetal")
+
+        try assertNoSwiftSourceLine(
+            under: source,
+            containsAnyImportOf: ["MetalKit", "SwiftUI", "AppKit", "AVFoundation", "CoreAudio", "GameplayKit"]
+        )
     }
 
     private func makeSnapshot(

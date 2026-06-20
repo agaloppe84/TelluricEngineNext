@@ -45,6 +45,9 @@ public struct MetalRenderBackendCapabilities: Codable, Equatable, Hashable, Send
     /// True when debug line rendering is implemented.
     public let supportsDebugLines: Bool
 
+    /// True when debug line CPU conversion and Metal buffer preparation are implemented.
+    public let supportsDebugLinePreparation: Bool
+
     /// True when debug point rendering is implemented.
     public let supportsDebugPoints: Bool
 
@@ -62,6 +65,7 @@ public struct MetalRenderBackendCapabilities: Codable, Equatable, Hashable, Send
         supportsDrawablePresentation: Bool = false,
         supportsRenderableInstances: Bool = false,
         supportsDebugLines: Bool = false,
+        supportsDebugLinePreparation: Bool = false,
         supportsDebugPoints: Bool = false,
         supportsDebugLabels: Bool = false,
         unavailableReason: String? = nil
@@ -72,6 +76,7 @@ public struct MetalRenderBackendCapabilities: Codable, Equatable, Hashable, Send
         self.supportsDrawablePresentation = supportsDrawablePresentation
         self.supportsRenderableInstances = supportsRenderableInstances
         self.supportsDebugLines = supportsDebugLines
+        self.supportsDebugLinePreparation = supportsDebugLinePreparation
         self.supportsDebugPoints = supportsDebugPoints
         self.supportsDebugLabels = supportsDebugLabels
         self.unavailableReason = unavailableReason
@@ -110,6 +115,11 @@ public struct MetalRenderError: Codable, Equatable, Error, Hashable, Sendable {
     /// Command queue creation failed.
     public static func commandQueueUnavailable(_ message: String) -> MetalRenderError {
         MetalRenderError(code: NamespaceID("render.metal.command_queue_unavailable"), message: message)
+    }
+
+    /// Debug line vertex buffer creation failed.
+    public static func debugLineBufferUnavailable(_ message: String) -> MetalRenderError {
+        MetalRenderError(code: NamespaceID("render.metal.debug_line.buffer_unavailable"), message: message)
     }
 
     /// Diagnostic view of this error.
@@ -173,7 +183,8 @@ public struct MetalDeviceContext: @unchecked Sendable {
             capabilities: MetalRenderBackendCapabilities(
                 isMetalAvailable: true,
                 deviceName: device.name,
-                hasCommandQueue: commandQueue != nil
+                hasCommandQueue: commandQueue != nil,
+                supportsDebugLinePreparation: true
             )
         )
         #else
@@ -192,6 +203,342 @@ public struct MetalDeviceContext: @unchecked Sendable {
         } catch {
             return .failure(MetalRenderError.metalUnavailable(String(describing: error)))
         }
+    }
+
+    #if canImport(Metal)
+    fileprivate func makeDebugLineBuffer(
+        packedVertices: [PackedMetalDebugLineVertex],
+        label: String
+    ) throws -> any MTLBuffer {
+        precondition(!packedVertices.isEmpty, "packedVertices must not be empty")
+
+        return try packedVertices.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else {
+                throw MetalRenderError.debugLineBufferUnavailable("Debug line vertex storage had no base address.")
+            }
+
+            guard let buffer = device.makeBuffer(bytes: baseAddress, length: rawBuffer.count, options: []) else {
+                throw MetalRenderError.debugLineBufferUnavailable("MTLDevice.makeBuffer(bytes:length:options:) returned nil.")
+            }
+
+            buffer.label = label
+            return buffer
+        }
+    }
+    #endif
+}
+
+/// CPU-side Metal debug line vertex produced from backend-neutral `DebugLine` primitives.
+public struct MetalDebugLineVertex: Codable, Equatable, Hashable, Sendable {
+    /// X coordinate in render/world space.
+    public let positionX: Float
+
+    /// Y coordinate in render/world space.
+    public let positionY: Float
+
+    /// Z coordinate in render/world space.
+    public let positionZ: Float
+
+    /// Red color component in `0...1`.
+    public let red: Float
+
+    /// Green color component in `0...1`.
+    public let green: Float
+
+    /// Blue color component in `0...1`.
+    public let blue: Float
+
+    /// Alpha color component in `0...1`.
+    public let alpha: Float
+
+    /// Creates a scalar Metal debug line vertex.
+    public init(
+        positionX: Float,
+        positionY: Float,
+        positionZ: Float,
+        red: Float,
+        green: Float,
+        blue: Float,
+        alpha: Float
+    ) {
+        self.positionX = positionX
+        self.positionY = positionY
+        self.positionZ = positionZ
+        self.red = red
+        self.green = green
+        self.blue = blue
+        self.alpha = alpha
+    }
+}
+
+/// Ordered CPU conversion output for debug line primitives.
+public struct MetalDebugLineBatch: Codable, Equatable, Sendable {
+    /// Ordered vertices. Each valid debug line contributes exactly two vertices.
+    public let vertices: [MetalDebugLineVertex]
+
+    /// Number of source debug lines consumed by the conversion pass.
+    public let sourceLineCount: Int
+
+    /// Diagnostics emitted while converting source debug lines.
+    public let diagnostics: DiagnosticReport
+
+    /// Creates a debug line batch.
+    public init(
+        vertices: [MetalDebugLineVertex],
+        sourceLineCount: Int,
+        diagnostics: DiagnosticReport = DiagnosticReport(messages: [])
+    ) {
+        precondition(sourceLineCount >= 0, "sourceLineCount must be non-negative")
+        precondition(vertices.count % 2 == 0, "Debug line vertices must be stored in start/end pairs")
+        self.vertices = vertices
+        self.sourceLineCount = sourceLineCount
+        self.diagnostics = diagnostics
+    }
+
+    /// Number of valid debug lines represented by `vertices`.
+    public var validLineCount: Int {
+        vertices.count / 2
+    }
+
+    /// Number of vertices represented by this batch.
+    public var vertexCount: Int {
+        vertices.count
+    }
+
+    /// Byte length required by the internal packed Metal vertex representation.
+    public var packedByteLength: Int {
+        vertices.count * MemoryLayout<PackedMetalDebugLineVertex>.stride
+    }
+
+    /// True when conversion completed without errors.
+    public var success: Bool {
+        !diagnostics.hasErrors
+    }
+}
+
+/// Result of preparing debug line vertices for a Metal buffer.
+public struct MetalDebugLineBuffer: @unchecked Sendable {
+    #if canImport(Metal)
+    private let buffer: (any MTLBuffer)?
+    #endif
+
+    /// Number of source debug lines consumed by the conversion pass.
+    public let sourceLineCount: Int
+
+    /// Number of valid debug lines represented by this buffer result.
+    public let validLineCount: Int
+
+    /// Number of vertices represented by this buffer result.
+    public let vertexCount: Int
+
+    /// Byte length of the packed vertex data.
+    public let byteLength: Int
+
+    /// True when a Metal buffer exists for non-empty vertex data.
+    public let hasMetalBuffer: Bool
+
+    /// Diagnostics emitted while preparing the buffer.
+    public let diagnostics: DiagnosticReport
+
+    /// True when buffer preparation completed without errors.
+    public let success: Bool
+
+    #if canImport(Metal)
+    fileprivate init(
+        batch: MetalDebugLineBatch,
+        buffer: (any MTLBuffer)?,
+        diagnostics: DiagnosticReport
+    ) {
+        self.buffer = buffer
+        self.sourceLineCount = batch.sourceLineCount
+        self.validLineCount = batch.validLineCount
+        self.vertexCount = batch.vertexCount
+        self.byteLength = batch.packedByteLength
+        self.hasMetalBuffer = buffer != nil
+        self.diagnostics = diagnostics
+        self.success = !diagnostics.hasErrors && (batch.vertexCount == 0 || buffer != nil)
+    }
+    #else
+    fileprivate init(batch: MetalDebugLineBatch, diagnostics: DiagnosticReport) {
+        self.sourceLineCount = batch.sourceLineCount
+        self.validLineCount = batch.validLineCount
+        self.vertexCount = batch.vertexCount
+        self.byteLength = batch.packedByteLength
+        self.hasMetalBuffer = false
+        self.diagnostics = diagnostics
+        self.success = !diagnostics.hasErrors && batch.vertexCount == 0
+    }
+    #endif
+}
+
+/// Debug line preparation pipeline for the isolated Metal backend.
+public enum MetalDebugLinePipeline {
+    /// Converts ordered debug line primitives into ordered Metal debug line vertices.
+    public static func makeBatch(lines: [DebugLine]) -> MetalDebugLineBatch {
+        var vertices: [MetalDebugLineVertex] = []
+        vertices.reserveCapacity(lines.count * 2)
+        var diagnostics: [DiagnosticMessage] = []
+
+        for (index, line) in lines.enumerated() {
+            guard hasFiniteEndpoints(line) else {
+                diagnostics.append(
+                    MetalRenderBackendDiagnostics.invalidDebugLine(
+                        index: index,
+                        reason: "Debug line endpoints must contain only finite coordinates."
+                    )
+                )
+                continue
+            }
+
+            vertices.append(vertex(fromStartOf: line))
+            vertices.append(vertex(fromEndOf: line))
+        }
+
+        return MetalDebugLineBatch(
+            vertices: vertices,
+            sourceLineCount: lines.count,
+            diagnostics: DiagnosticReport(messages: diagnostics)
+        )
+    }
+
+    /// Creates a Metal vertex buffer for a converted debug line batch when a context is available.
+    public static func makeBuffer(
+        batch: MetalDebugLineBatch,
+        context: MetalDeviceContext?,
+        label: String = "telluric.render.metal.debug_lines"
+    ) -> MetalDebugLineBuffer {
+        var diagnostics = batch.diagnostics.messages
+
+        guard !batch.diagnostics.hasErrors else {
+            return bufferResultWithoutMetalBuffer(batch: batch, diagnostics: DiagnosticReport(messages: diagnostics))
+        }
+
+        guard batch.vertexCount > 0 else {
+            return bufferResultWithoutMetalBuffer(batch: batch, diagnostics: DiagnosticReport(messages: diagnostics))
+        }
+
+        guard let context else {
+            diagnostics.append(
+                MetalRenderBackendDiagnostics.debugLineBufferUnavailable(
+                    reason: "No Metal device context is available for debug line buffer creation.",
+                    vertexCount: batch.vertexCount
+                )
+            )
+            return bufferResultWithoutMetalBuffer(batch: batch, diagnostics: DiagnosticReport(messages: diagnostics))
+        }
+
+        #if canImport(Metal)
+        do {
+            let packedVertices = batch.vertices.map(PackedMetalDebugLineVertex.init(vertex:))
+            let buffer = try context.makeDebugLineBuffer(packedVertices: packedVertices, label: label)
+            return bufferResult(batch: batch, buffer: buffer, diagnostics: DiagnosticReport(messages: diagnostics))
+        } catch let error as MetalRenderError {
+            diagnostics.append(
+                MetalRenderBackendDiagnostics.debugLineBufferUnavailable(
+                    reason: error.message,
+                    vertexCount: batch.vertexCount
+                )
+            )
+            return bufferResultWithoutMetalBuffer(batch: batch, diagnostics: DiagnosticReport(messages: diagnostics))
+        } catch {
+            diagnostics.append(
+                MetalRenderBackendDiagnostics.debugLineBufferUnavailable(
+                    reason: String(describing: error),
+                    vertexCount: batch.vertexCount
+                )
+            )
+            return bufferResultWithoutMetalBuffer(batch: batch, diagnostics: DiagnosticReport(messages: diagnostics))
+        }
+        #else
+        diagnostics.append(
+            MetalRenderBackendDiagnostics.debugLineBufferUnavailable(
+                reason: "The Metal framework is unavailable on this platform.",
+                vertexCount: batch.vertexCount
+            )
+        )
+        return bufferResult(batch: batch, diagnostics: DiagnosticReport(messages: diagnostics))
+        #endif
+    }
+
+    private static func vertex(fromStartOf line: DebugLine) -> MetalDebugLineVertex {
+        MetalDebugLineVertex(
+            positionX: line.start.x,
+            positionY: line.start.y,
+            positionZ: line.start.z,
+            red: line.color.red,
+            green: line.color.green,
+            blue: line.color.blue,
+            alpha: line.color.alpha
+        )
+    }
+
+    private static func vertex(fromEndOf line: DebugLine) -> MetalDebugLineVertex {
+        MetalDebugLineVertex(
+            positionX: line.end.x,
+            positionY: line.end.y,
+            positionZ: line.end.z,
+            red: line.color.red,
+            green: line.color.green,
+            blue: line.color.blue,
+            alpha: line.color.alpha
+        )
+    }
+
+    private static func hasFiniteEndpoints(_ line: DebugLine) -> Bool {
+        line.start.x.isFinite
+            && line.start.y.isFinite
+            && line.start.z.isFinite
+            && line.end.x.isFinite
+            && line.end.y.isFinite
+            && line.end.z.isFinite
+    }
+
+    private static func bufferResultWithoutMetalBuffer(
+        batch: MetalDebugLineBatch,
+        diagnostics: DiagnosticReport
+    ) -> MetalDebugLineBuffer {
+        #if canImport(Metal)
+        MetalDebugLineBuffer(batch: batch, buffer: nil, diagnostics: diagnostics)
+        #else
+        MetalDebugLineBuffer(batch: batch, diagnostics: diagnostics)
+        #endif
+    }
+
+    #if canImport(Metal)
+    private static func bufferResult(
+        batch: MetalDebugLineBatch,
+        buffer: (any MTLBuffer)?,
+        diagnostics: DiagnosticReport
+    ) -> MetalDebugLineBuffer {
+        MetalDebugLineBuffer(batch: batch, buffer: buffer, diagnostics: diagnostics)
+    }
+    #else
+    private static func bufferResult(
+        batch: MetalDebugLineBatch,
+        diagnostics: DiagnosticReport
+    ) -> MetalDebugLineBuffer {
+        MetalDebugLineBuffer(batch: batch, diagnostics: diagnostics)
+    }
+    #endif
+}
+
+fileprivate struct PackedMetalDebugLineVertex {
+    let positionX: Float
+    let positionY: Float
+    let positionZ: Float
+    let red: Float
+    let green: Float
+    let blue: Float
+    let alpha: Float
+
+    init(vertex: MetalDebugLineVertex) {
+        self.positionX = vertex.positionX
+        self.positionY = vertex.positionY
+        self.positionZ = vertex.positionZ
+        self.red = vertex.red
+        self.green = vertex.green
+        self.blue = vertex.blue
+        self.alpha = vertex.alpha
     }
 }
 
@@ -239,6 +586,15 @@ public struct MetalRenderFrameResult: Codable, Equatable, Sendable {
     /// Number of unsupported debug lines.
     public let unsupportedDebugLineCount: Int
 
+    /// Number of debug lines converted into Metal-side vertex data.
+    public let preparedDebugLineCount: Int
+
+    /// Number of debug line vertices prepared for Metal-side consumption.
+    public let preparedDebugLineVertexCount: Int
+
+    /// Byte length of prepared debug line vertex data.
+    public let preparedDebugLineBufferByteLength: Int
+
     /// Number of unsupported debug points.
     public let unsupportedDebugPointCount: Int
 
@@ -259,6 +615,9 @@ public struct MetalRenderFrameResult: Codable, Equatable, Sendable {
         unsupportedRenderableInstanceCount: Int,
         unsupportedTextureReferenceCount: Int,
         unsupportedDebugLineCount: Int,
+        preparedDebugLineCount: Int = 0,
+        preparedDebugLineVertexCount: Int = 0,
+        preparedDebugLineBufferByteLength: Int = 0,
         unsupportedDebugPointCount: Int,
         unsupportedDebugLabelCount: Int,
         diagnostics: DiagnosticReport
@@ -266,6 +625,9 @@ public struct MetalRenderFrameResult: Codable, Equatable, Sendable {
         precondition(unsupportedRenderableInstanceCount >= 0, "unsupportedRenderableInstanceCount must be non-negative")
         precondition(unsupportedTextureReferenceCount >= 0, "unsupportedTextureReferenceCount must be non-negative")
         precondition(unsupportedDebugLineCount >= 0, "unsupportedDebugLineCount must be non-negative")
+        precondition(preparedDebugLineCount >= 0, "preparedDebugLineCount must be non-negative")
+        precondition(preparedDebugLineVertexCount >= 0, "preparedDebugLineVertexCount must be non-negative")
+        precondition(preparedDebugLineBufferByteLength >= 0, "preparedDebugLineBufferByteLength must be non-negative")
         precondition(unsupportedDebugPointCount >= 0, "unsupportedDebugPointCount must be non-negative")
         precondition(unsupportedDebugLabelCount >= 0, "unsupportedDebugLabelCount must be non-negative")
 
@@ -275,6 +637,9 @@ public struct MetalRenderFrameResult: Codable, Equatable, Sendable {
         self.unsupportedRenderableInstanceCount = unsupportedRenderableInstanceCount
         self.unsupportedTextureReferenceCount = unsupportedTextureReferenceCount
         self.unsupportedDebugLineCount = unsupportedDebugLineCount
+        self.preparedDebugLineCount = preparedDebugLineCount
+        self.preparedDebugLineVertexCount = preparedDebugLineVertexCount
+        self.preparedDebugLineBufferByteLength = preparedDebugLineBufferByteLength
         self.unsupportedDebugPointCount = unsupportedDebugPointCount
         self.unsupportedDebugLabelCount = unsupportedDebugLabelCount
         self.diagnostics = diagnostics
@@ -356,6 +721,32 @@ public enum MetalRenderBackendDiagnostics {
         )
     }
 
+    /// Creates a diagnostic for invalid debug line source data.
+    public static func invalidDebugLine(index: Int, reason: String) -> DiagnosticMessage {
+        DiagnosticMessage(
+            severity: .error,
+            code: NamespaceID("render.metal.debug_line.invalid"),
+            message: reason,
+            source: "TelluricRenderMetal",
+            metadata: [
+                DiagnosticMetadata(key: "index", value: "\(index)"),
+            ]
+        )
+    }
+
+    /// Creates a diagnostic for debug line buffer creation that cannot proceed.
+    public static func debugLineBufferUnavailable(reason: String, vertexCount: Int) -> DiagnosticMessage {
+        DiagnosticMessage(
+            severity: .error,
+            code: NamespaceID("render.metal.debug_line.buffer_unavailable"),
+            message: reason,
+            source: "TelluricRenderMetal",
+            metadata: [
+                DiagnosticMetadata(key: "vertexCount", value: "\(vertexCount)"),
+            ]
+        )
+    }
+
     private static func unsupported(
         code: String,
         message: String,
@@ -424,7 +815,15 @@ public struct MetalRenderBackend: Sendable {
         let unsupportedTextureReferenceCount = snapshot.instances.reduce(0) { partialResult, instance in
             partialResult + instance.textures.count
         }
-        let unsupportedLineCount = snapshot.debugLines.count
+        let debugLineBatch = MetalDebugLinePipeline.makeBatch(lines: snapshot.debugLines)
+        let debugLineBuffer = MetalDebugLinePipeline.makeBuffer(
+            batch: debugLineBatch,
+            context: context,
+            label: "\(config.label).debug_lines"
+        )
+        messages.append(contentsOf: debugLineBuffer.diagnostics.messages)
+
+        let unsupportedLineCount = 0
         let unsupportedPointCount = snapshot.debugPoints.count
         let unsupportedLabelCount = snapshot.debugLabels.count
 
@@ -434,10 +833,6 @@ public struct MetalRenderBackend: Sendable {
 
         if unsupportedTextureReferenceCount > 0 {
             messages.append(MetalRenderBackendDiagnostics.unsupportedTextureReferences(count: unsupportedTextureReferenceCount))
-        }
-
-        if unsupportedLineCount > 0 {
-            messages.append(MetalRenderBackendDiagnostics.unsupportedDebugLines(count: unsupportedLineCount))
         }
 
         if unsupportedPointCount > 0 {
@@ -455,6 +850,9 @@ public struct MetalRenderBackend: Sendable {
             unsupportedRenderableInstanceCount: unsupportedInstanceCount,
             unsupportedTextureReferenceCount: unsupportedTextureReferenceCount,
             unsupportedDebugLineCount: unsupportedLineCount,
+            preparedDebugLineCount: debugLineBuffer.validLineCount,
+            preparedDebugLineVertexCount: debugLineBuffer.vertexCount,
+            preparedDebugLineBufferByteLength: debugLineBuffer.byteLength,
             unsupportedDebugPointCount: unsupportedPointCount,
             unsupportedDebugLabelCount: unsupportedLabelCount,
             diagnostics: DiagnosticReport(messages: messages)
