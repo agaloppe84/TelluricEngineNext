@@ -28,6 +28,19 @@ Runtime code must not know about:
 
 It uses neutral `StreamingObserver` values and engine-neutral `SimulationInputFrame` commands.
 
+## Runtime vs Game Layer
+
+Phase 14 adds `TelluricGame` above runtime.
+
+`GameSession` may own a `TelluricRuntime` as a client, map ordered game intents into a `SimulationInputFrame`, and call `TelluricRuntime.step(...)`. The dependency does not reverse:
+
+```text
+TelluricGame -> TelluricRuntime
+TelluricRuntime -/-> TelluricGame
+```
+
+Runtime remains app-free, gameplay-free, render-free, and unaware of game-layer types. Invalid game intents are rejected before runtime stepping, so a game mapping failure does not mutate runtime state.
+
 ## Runtime vs Streaming Planner
 
 `TelluricStreaming` remains a pure planner:

@@ -24,6 +24,7 @@ if [ -d Sources ]; then
     TelluricAssets
     TelluricPersistence
     TelluricRuntime
+    TelluricGame
     TelluricRender
     TelluricRenderExtraction
     TelluricRenderMetal
@@ -47,12 +48,11 @@ if [ -d Sources ]; then
     done
 
     if [ "$is_allowed" -ne 1 ]; then
-      fail "Phase 0 source target is not allowed yet: $target_name"
+      fail "source target is not allowed in the current architecture phase: $target_name"
     fi
   done
 
-  forbidden_phase0_targets=(
-    TelluricGame
+  forbidden_source_targets=(
     TelluricGameApp
     TelluricAudioTools
     TelluricMotionTools
@@ -61,9 +61,9 @@ if [ -d Sources ]; then
     TelluricWorldLab
   )
 
-  for forbidden_target in "${forbidden_phase0_targets[@]}"; do
+  for forbidden_target in "${forbidden_source_targets[@]}"; do
     if [ -e "Sources/$forbidden_target" ]; then
-      fail "Phase 0 must not create $forbidden_target"
+      fail "current architecture phase must not create $forbidden_target"
     fi
   done
 
@@ -86,6 +86,7 @@ if [ -d Sources ]; then
     Sources/TelluricBiomes
     Sources/TelluricStreaming
     Sources/TelluricRuntime
+    Sources/TelluricGame
     Sources/TelluricRender
     Sources/TelluricRenderExtraction
     Sources/TelluricRenderMetal
@@ -119,6 +120,7 @@ if [ -d Sources ]; then
     Sources/TelluricPersistence
     Sources/TelluricRuntime
     Sources/TelluricRender
+    Sources/TelluricRenderExtraction
     Sources/TelluricRenderMetal
   )
 
@@ -157,6 +159,13 @@ if [ -d Sources ]; then
       fail "$bridge_forbidden_import_dir imports the render extraction bridge"
     fi
   done
+
+  if [ -d Sources/TelluricGame ]; then
+    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricRenderMetal|TelluricGameApp)([[:space:]]|$)" Sources/TelluricGame --include="*.swift" >/dev/null 2>&1; then
+      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricRenderMetal|TelluricGameApp)([[:space:]]|$)" Sources/TelluricGame --include="*.swift" >&2
+      fail "TelluricGame must not import render backends or app targets"
+    fi
+  fi
 fi
 
 for forbidden in Gemfile Gemfile.lock .bundle vendor/bundle; do
@@ -170,9 +179,9 @@ if find . -path ./.git -prune -o \( -name "*.rb" -o -name Rakefile -o -name conf
   fail "Ruby/Rails files are not allowed in this repo"
 fi
 
-for forbidden_package_name in TelluricGame TelluricGameApp TelluricAudioTools TelluricMotionTools TelluricMLTools TelluricRPGCore TelluricWorldLab; do
+for forbidden_package_name in TelluricGameApp TelluricAudioTools TelluricMotionTools TelluricMLTools TelluricRPGCore TelluricWorldLab; do
   if [ -f Package.swift ] && grep -n "\"$forbidden_package_name\"" Package.swift >/dev/null 2>&1; then
-    fail "Package.swift contains a target not allowed in Phase 0: $forbidden_package_name"
+    fail "Package.swift contains a target not allowed in the current architecture phase: $forbidden_package_name"
   fi
 done
 

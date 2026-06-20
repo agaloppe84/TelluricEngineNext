@@ -177,6 +177,23 @@ Phase 12 introduces `TelluricRenderMetal` as the isolated Metal backend skeleton
 
 Future `TelluricRenderMetal` phases may own RenderGraph, pipelines, GPU resources and IVDS rendering. Metal must remain isolated to this backend target.
 
+### Game layer
+
+```text
+TelluricGame
+```
+
+Responsibilities:
+
+- game session contracts;
+- game input frames;
+- ordered game intents;
+- mapping game intents to engine-neutral simulation commands;
+- owning `TelluricRuntime` as a client when a game session is needed;
+- game-layer diagnostics and stable step hashes.
+
+Phase 14 implements the first game-layer contracts. It does not create an app, platform input, UI, rendering, Metal integration, player controllers, combat, inventory, quests, factions, RPG stats, audio, motion or ML.
+
 ### Audio
 
 ```text
@@ -294,11 +311,12 @@ Procedural systems testable before rendering
 10. Assets / AssetCooker behavior
 11. Persistence / snapshot save-load contracts
 12. Isolated RenderMetal backend skeleton
-13. ReplayInspector behavior
-14. Runtime app thin
-15. Game layer
-16. WorldLab
-17. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+13. Metal debug line pipeline
+14. Game layer contracts
+15. ReplayInspector behavior
+16. Runtime app thin
+17. WorldLab
+18. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

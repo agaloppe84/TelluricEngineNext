@@ -57,6 +57,8 @@ Commands are applied in the order stored in `SimulationInputFrame.commandBuffer`
 
 Invalid commands produce ordered `DiagnosticReport` entries. Invalid tick order is rejected and does not advance the simulation world.
 
+Phase 14 adds `TelluricGame` above simulation. Game intents are mapped into these existing engine-neutral simulation commands before runtime stepping. `TelluricSimulation` does not import game code and does not gain player, controller, combat, inventory, quest, faction, ability, or RPG stat concepts.
+
 ## Replay-Friendly Input Frames
 
 `SimulationInputFrame` stores one tick and an ordered `SimulationCommandBuffer`.
@@ -107,6 +109,8 @@ Simulation must not import runtime, render, UI, Metal, game, tool UI, audio, mot
 Simulation must also not import `TelluricPersistence`; persistence may wrap simulation payloads, but simulation remains lower-level.
 
 `TelluricRuntime` may depend on `TelluricSimulation` and call `SimulationWorld.step(...)`. The dependency remains one-way: simulation never imports runtime. Runtime reports simulation diagnostics and does not silently advance simulation state when an input frame is rejected.
+
+`TelluricGame` may depend on `TelluricSimulation` as a higher-level client and produce `SimulationInputFrame` values. That dependency also remains one-way.
 
 ## Not Implemented In Phase 6
 

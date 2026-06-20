@@ -118,6 +118,16 @@ Telluric.PersistenceEnvelope.v1
 
 Persistence payload hashes are derived from deterministic JSON payload bytes encoded by `PersistenceJSONEncoder`. Envelope hashes include schema id, format version, engine version, envelope kind, stored payload hash, and ordered metadata. Persistence packages exclude wall-clock timestamps, save-slot UI state, platform storage paths, process-local values, and unordered metadata traversal.
 
+Phase 14 game-layer contracts add:
+
+```text
+Telluric.GameInputFrame.v1
+Telluric.GameIntentMappingResult.v1
+Telluric.GameStepResult.v1
+```
+
+Game determinism depends on ordered game intents, deterministic rule-profile scaling, ordered simulation command output, runtime snapshot hashes, ordered diagnostics, and explicit success state. Game hashes exclude platform input events, device handles, app lifecycle state, rendering resources, wall-clock time, process-local values, and unordered collection traversal.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

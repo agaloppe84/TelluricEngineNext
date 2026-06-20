@@ -75,6 +75,7 @@ See `Docs/architecture/STREAMING.md`.
 TelluricAssets -> TelluricCore, TelluricDeterminism, TelluricDiagnostics
 TelluricPersistence -> TelluricCore, TelluricDeterminism, TelluricSimulation, TelluricWorld, TelluricDiagnostics
 TelluricRuntime -> TelluricCore, TelluricDeterminism, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
+TelluricGame -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricDiagnostics, TelluricECS, TelluricSimulation, TelluricStreaming, TelluricRuntime
 TelluricRender -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricAssets
 TelluricRenderExtraction -> TelluricCore, TelluricDiagnostics, TelluricMath, TelluricRender, TelluricRuntime, TelluricWorld
 TelluricRenderMetal -> TelluricCore, TelluricDiagnostics, TelluricRender
@@ -130,10 +131,20 @@ Phase 12 implements `TelluricRenderMetal` as the isolated Metal backend skeleton
 - it is the only active target allowed to import `Metal`;
 - it attempts system-default device and command queue creation;
 - it accepts backend-neutral `RenderSnapshot` values;
-- it reports explicit unsupported diagnostics for renderable instances, texture/material binding, debug primitives, and drawable presentation;
+- Phase 13 adds debug line CPU conversion and optional Metal buffer preparation;
+- it reports explicit unsupported diagnostics for renderable instances, texture/material binding, debug points, debug labels, and drawable presentation;
 - it does not create an app, window, `MTKView`, render loop, runtime integration, mesh generation, asset loading, gameplay, or tools UI.
 
 See `Docs/architecture/METAL_BACKEND.md`.
+
+Phase 14 implements `TelluricGame` as the first game client contract layer:
+
+- it owns game session ids, game config, neutral game rules profiles, ordered game intents, game input frames, intent mapping results, game step inputs/results, and a `GameSession` runtime client;
+- it maps ordered `GameIntent` values into ordered `SimulationCommand` values through `GameIntentMapper`;
+- it may own `TelluricRuntime` as a client, but runtime and lower engine modules must not import game code;
+- it does not implement an app, platform input, UI, rendering, Metal, player controllers, gameplay camera, combat, inventory, quests, factions, RPG stats, audio, motion, or ML.
+
+See `Docs/architecture/GAME_LAYER.md`.
 
 ### Tools CLI targets
 
@@ -159,7 +170,6 @@ Phase 10 implements `telluric-asset-cooker` as the first asset manifest validati
 These targets remain part of the architecture but are not created in Phase 0:
 
 ```text
-TelluricGame
 TelluricGameApp
 TelluricSurfaces
 TelluricEcology
@@ -176,6 +186,7 @@ TelluricWorldLab
 ```
 
 `TelluricRenderMetal` is now active as of Phase 12. Future backend expansions must keep Metal isolated to that target.
+`TelluricGame` is now active as of Phase 14. `TelluricGameApp` remains deferred.
 
 ## 3. Guard Rules
 
@@ -188,6 +199,7 @@ Phase 0 architecture guards must fail if:
 - Metal or MetalKit are imported outside `Sources/TelluricRenderMetal`;
 - deterministic/procedural modules use `random(in:)`, `UUID()`, or `Date()`;
 - engine modules import app, game, or tool modules.
+- `TelluricGame` imports render backend or app targets.
 - low-level engine modules import `TelluricRenderExtraction`.
 - engine modules import `TelluricAssetCooker` or `TelluricAssetCookerCore`.
 - low-level modules import `TelluricPersistence` outside allowed runtime/persistence boundaries.

@@ -6,6 +6,7 @@ import TelluricCore
 import TelluricDeterminism
 import TelluricDiagnostics
 import TelluricECS
+import TelluricGame
 import TelluricMath
 import TelluricPersistence
 import TelluricRender
@@ -73,6 +74,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricBiomes",
             "TelluricStreaming",
             "TelluricRuntime",
+            "TelluricGame",
             "TelluricRender",
             "TelluricRenderExtraction",
             "TelluricPersistence",
@@ -142,6 +144,36 @@ final class ArchitectureImportTests: XCTestCase {
             try assertNoSwiftSourceLine(
                 under: moduleURL,
                 containsAnyImportOf: ["TelluricAssetCooker", "TelluricAssetCookerCore"]
+            )
+        }
+    }
+
+    func testEngineModulesDoNotImportGameTargets() throws {
+        let root = try packageRoot()
+        let moduleNames = [
+            "TelluricCore",
+            "TelluricMath",
+            "TelluricDeterminism",
+            "TelluricDiagnostics",
+            "TelluricECS",
+            "TelluricSimulation",
+            "TelluricWorld",
+            "TelluricTerrain",
+            "TelluricBiomes",
+            "TelluricStreaming",
+            "TelluricAssets",
+            "TelluricPersistence",
+            "TelluricRuntime",
+            "TelluricRender",
+            "TelluricRenderExtraction",
+            "TelluricRenderMetal",
+        ]
+
+        for moduleName in moduleNames {
+            let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
+            try assertNoSwiftSourceLine(
+                under: moduleURL,
+                containsAnyImportOf: ["TelluricGame", "TelluricGameApp"]
             )
         }
     }
