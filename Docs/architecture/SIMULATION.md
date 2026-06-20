@@ -63,6 +63,8 @@ Invalid commands produce ordered `DiagnosticReport` entries. Invalid tick order 
 
 `ReplayInputLog` stores ordered input frames and is JSON-friendly. It is meant for future replay, seed validation, debugging, and CLI inspection. It does not store wall-clock time.
 
+Phase 11 persistence can wrap replay logs through `ReplayPackage<ReplayInputLog>` and simulation snapshots through `SnapshotPackage<SimulationSnapshot>`. Simulation still does not import persistence; the package boundary belongs above simulation or inside `TelluricPersistence`.
+
 ## Snapshot Ordering
 
 `EntitySnapshot` and `SimulationSnapshot` use ordered arrays. Entity records are sorted by `EntityID`; component values are sorted by `ComponentTypeID`.
@@ -102,6 +104,7 @@ TelluricECS
 ```
 
 Simulation must not import runtime, render, UI, Metal, game, tool UI, audio, motion, or ML modules.
+Simulation must also not import `TelluricPersistence`; persistence may wrap simulation payloads, but simulation remains lower-level.
 
 `TelluricRuntime` may depend on `TelluricSimulation` and call `SimulationWorld.step(...)`. The dependency remains one-way: simulation never imports runtime. Runtime reports simulation diagnostics and does not silently advance simulation state when an input frame is rejected.
 

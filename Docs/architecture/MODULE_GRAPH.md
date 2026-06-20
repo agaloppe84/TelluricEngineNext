@@ -115,6 +115,15 @@ Phase 10 implements `TelluricAssets` as the asset manifest contract layer:
 
 See `Docs/architecture/ASSETS.md`.
 
+Phase 11 implements `TelluricPersistence` as the snapshot, replay, and report package contract layer:
+
+- it owns persistence format versions, schema ids, envelope kinds, payload hashes, ordered metadata, generic envelopes, snapshot/replay/report packages, deterministic JSON helpers, validation reports, and stable package hashing;
+- it imports simulation contracts for replay/simulation snapshot convenience types;
+- it does not import runtime, render, render extraction, seed validator, asset cooker, app, game, UI, Metal, or platform storage code;
+- runtime snapshots, render snapshots, and tool reports are wrapped through generic package APIs by their callers rather than by reversing dependency direction.
+
+See `Docs/architecture/PERSISTENCE.md`.
+
 ### Tools CLI targets
 
 ```text
@@ -170,5 +179,6 @@ Phase 0 architecture guards must fail if:
 - engine modules import app, game, or tool modules.
 - low-level engine modules import `TelluricRenderExtraction`.
 - engine modules import `TelluricAssetCooker` or `TelluricAssetCookerCore`.
+- low-level modules import `TelluricPersistence` outside allowed runtime/persistence boundaries.
 
 Phase 4 also runs a tiny repo-local seed validator smoke check from `scripts/check-architecture-guards.sh`.

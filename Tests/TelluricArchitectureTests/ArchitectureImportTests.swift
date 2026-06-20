@@ -55,6 +55,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricRuntime",
             "TelluricRender",
             "TelluricRenderExtraction",
+            "TelluricPersistence",
         ]
         let forbiddenTokens = [
             "random(in:",
@@ -119,6 +120,30 @@ final class ArchitectureImportTests: XCTestCase {
                 under: moduleURL,
                 containsAnyImportOf: ["TelluricAssetCooker", "TelluricAssetCookerCore"]
             )
+        }
+    }
+
+    func testLowLevelModulesDoNotImportPersistence() throws {
+        let root = try packageRoot()
+        let moduleNames = [
+            "TelluricCore",
+            "TelluricMath",
+            "TelluricDeterminism",
+            "TelluricDiagnostics",
+            "TelluricECS",
+            "TelluricSimulation",
+            "TelluricWorld",
+            "TelluricTerrain",
+            "TelluricBiomes",
+            "TelluricStreaming",
+            "TelluricAssets",
+            "TelluricRender",
+            "TelluricRenderExtraction",
+        ]
+
+        for moduleName in moduleNames {
+            let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
+            try assertNoSwiftSourceLine(under: moduleURL, containsAnyImportOf: ["TelluricPersistence"])
         }
     }
 

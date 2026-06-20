@@ -84,6 +84,7 @@ if [ -d Sources ]; then
     Sources/TelluricRender
     Sources/TelluricRenderExtraction
     Sources/TelluricAssets
+    Sources/TelluricPersistence
     Sources/TelluricSeedValidatorCore
     Sources/TelluricAssetCookerCore
   )

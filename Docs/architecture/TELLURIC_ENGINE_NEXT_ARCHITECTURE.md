@@ -151,6 +151,8 @@ Phase 7 implements the first runtime behavior in `TelluricRuntime`: synchronous 
 
 Phase 10 implements the first asset behavior in `TelluricAssets`: JSON manifests, asset IDs, source/cooked paths, cooked descriptors, asset registries, validation reports, and stable asset hashes. It does not implement runtime asset streaming, GPU resources, conversion, editor UI, or gameplay assets.
 
+Phase 11 implements the first persistence behavior in `TelluricPersistence`: snapshot packages, replay packages, report packages, schema/version metadata, deterministic JSON helpers, payload hash verification, and validation diagnostics. It does not implement game save slots, platform storage, cloud sync, databases, binary compression, or gameplay save semantics.
+
 ### Rendering contracts and backend
 
 ```text
@@ -286,12 +288,13 @@ Procedural systems testable before rendering
 8. RenderSnapshot contracts
 9. Runtime render extraction
 10. Assets / AssetCooker behavior
-11. ReplayInspector behavior
-12. RenderMetal backend
-13. Runtime app thin
-14. Game layer
-15. WorldLab
-16. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+11. Persistence / snapshot save-load contracts
+12. ReplayInspector behavior
+13. RenderMetal backend
+14. Runtime app thin
+15. Game layer
+16. WorldLab
+17. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

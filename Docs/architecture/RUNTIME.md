@@ -82,6 +82,22 @@ This is intentionally not async streaming. Future runtime phases can add schedul
 
 Public runtime arrays are sorted deterministically. Hashing never depends on dictionary or set iteration.
 
+## Runtime Snapshot Persistence
+
+Phase 11 adds `TelluricPersistence` packages that can wrap `RuntimeSnapshot` values through generic `SnapshotPackage` APIs from the caller side.
+
+`TelluricRuntime` remains the producer of runtime snapshots. It does not own save slots, storage paths, gameplay save semantics, cloud sync, or platform file management.
+
+The persistence boundary is:
+
+```text
+TelluricRuntime -> RuntimeSnapshot
+caller/tool/app -> SnapshotPackage<RuntimeSnapshot>
+TelluricPersistence -> envelope, JSON, hash verification, validation
+```
+
+This keeps runtime orchestration separate from save/load policy.
+
 ## Runtime Hashing
 
 Runtime snapshots use:
@@ -110,7 +126,7 @@ Phase 7 does not implement:
 - Metal or MetalKit;
 - mesh generation;
 - asset loading or cooking behavior;
-- persistence and save formats;
+- gameplay save slots or platform storage;
 - gameplay;
 - player or camera concepts;
 - app lifecycle;
