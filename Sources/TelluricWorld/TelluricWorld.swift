@@ -264,6 +264,11 @@ public struct WorldGenerationReport: Codable, Equatable, Hashable, Sendable {
         self.issues = issues
     }
 
+    /// True when the report contains no errors.
+    public var isSuccess: Bool {
+        !hasErrors
+    }
+
     public var hasErrors: Bool {
         issues.contains { $0.severity == .error }
     }
@@ -374,5 +379,150 @@ public enum ChunkPayloadHasher {
         }
 
         return hasher.finalize()
+    }
+}
+
+/// Result from a component generator participating in chunk generation.
+public struct WorldChunkComponentGeneration: Codable, Equatable, Hashable, Sendable {
+    /// Stable component hashes produced by the component generator.
+    public let componentHashes: [ChunkPayloadComponentHash]
+
+    /// Validation report for this component generation step.
+    public let report: WorldGenerationReport
+
+    /// Creates a component generation result.
+    public init(
+        componentHashes: [ChunkPayloadComponentHash],
+        report: WorldGenerationReport = WorldGenerationReport(issues: [])
+    ) {
+        self.componentHashes = componentHashes
+        self.report = report
+    }
+}
+
+/// Type-erased protocol boundary for deterministic chunk component generation.
+public protocol WorldChunkComponentGenerating: Sendable {
+    /// Generates one or more component hashes for `chunkCoord`.
+    func generateChunkComponents(
+        context: WorldGenerationContext,
+        chunkCoord: ChunkCoord
+    ) throws -> WorldChunkComponentGeneration
+}
+
+/// Successful deterministic chunk generation result.
+public struct WorldChunkGenerationResult: Codable, Equatable, Hashable, Sendable {
+    /// Aggregated chunk payload.
+    public let payload: ChunkWorldPayload
+
+    /// Ordered validation and generation report.
+    public let report: WorldGenerationReport
+
+    /// Creates a chunk generation result.
+    public init(payload: ChunkWorldPayload, report: WorldGenerationReport) {
+        self.payload = payload
+        self.report = report
+    }
+}
+
+/// Error thrown when deterministic world generation cannot produce a valid chunk payload.
+public struct WorldGenerationError: Error, Equatable, Sendable {
+    /// Report describing the generation failure.
+    public let report: WorldGenerationReport
+
+    /// Creates a generation error from a report.
+    public init(report: WorldGenerationReport) {
+        self.report = report
+    }
+}
+
+/// Deterministic world-level chunk orchestrator.
+public struct DeterministicWorldGenerator: Sendable {
+    private let componentGenerators: [any WorldChunkComponentGenerating]
+    private let requiredComponentKinds: [ChunkPayloadComponentKind]
+
+    /// Creates a generator from one component generator.
+    public init(
+        componentGenerator: any WorldChunkComponentGenerating,
+        requiredComponentKinds: [ChunkPayloadComponentKind] = [.terrain, .biomes]
+    ) {
+        self.init(
+            componentGenerators: [componentGenerator],
+            requiredComponentKinds: requiredComponentKinds
+        )
+    }
+
+    /// Creates a generator from ordered component generators.
+    public init(
+        componentGenerators: [any WorldChunkComponentGenerating],
+        requiredComponentKinds: [ChunkPayloadComponentKind] = [.terrain, .biomes]
+    ) {
+        precondition(!componentGenerators.isEmpty, "DeterministicWorldGenerator requires at least one component generator")
+        self.componentGenerators = componentGenerators
+        self.requiredComponentKinds = requiredComponentKinds
+    }
+
+    /// Generates an aggregate chunk payload and report.
+    public func generateChunk(
+        at chunkCoord: ChunkCoord,
+        context: WorldGenerationContext
+    ) throws -> WorldChunkGenerationResult {
+        var issues = WorldGenerationValidation.validate(config: context.config).issues
+        if issues.contains(where: { $0.severity == .error }) {
+            throw WorldGenerationError(report: WorldGenerationReport(issues: issues))
+        }
+
+        var componentHashes: [ChunkPayloadComponentHash] = []
+        for componentGenerator in componentGenerators {
+            let generation = try componentGenerator.generateChunkComponents(
+                context: context,
+                chunkCoord: chunkCoord
+            )
+            componentHashes.append(contentsOf: generation.componentHashes)
+            issues.append(contentsOf: generation.report.issues)
+        }
+
+        issues.append(contentsOf: missingComponentIssues(
+            componentHashes: componentHashes,
+            chunkCoord: chunkCoord
+        ))
+
+        let report = WorldGenerationReport(issues: issues)
+        if report.hasErrors {
+            throw WorldGenerationError(report: report)
+        }
+
+        return WorldChunkGenerationResult(
+            payload: ChunkWorldPayload(chunkCoord: chunkCoord, componentHashes: componentHashes),
+            report: report
+        )
+    }
+
+    /// Generates only the aggregate payload, throwing if validation fails.
+    public func generateChunkPayload(
+        at chunkCoord: ChunkCoord,
+        context: WorldGenerationContext
+    ) throws -> ChunkWorldPayload {
+        try generateChunk(at: chunkCoord, context: context).payload
+    }
+
+    private func missingComponentIssues(
+        componentHashes: [ChunkPayloadComponentHash],
+        chunkCoord: ChunkCoord
+    ) -> [WorldGenerationIssue] {
+        var issues: [WorldGenerationIssue] = []
+
+        for requiredKind in requiredComponentKinds {
+            let hasKind = componentHashes.contains { $0.kind == requiredKind }
+            if !hasKind {
+                issues.append(WorldGenerationIssue(
+                    severity: .error,
+                    code: NamespaceID("world.generator.missing_component"),
+                    message: "Required chunk component is missing: \(requiredKind.rawValue).",
+                    chunkCoord: chunkCoord
+                ))
+            }
+        }
+
+        return issues
     }
 }

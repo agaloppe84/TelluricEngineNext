@@ -47,6 +47,12 @@ Phase 2 implements data, validation, hashing, and protocol contracts for `Tellur
 - `Docs/architecture/WORLD_DATA_CONTRACTS.md`
 - `Docs/architecture/WORLD_GENERATION.md`
 
+Phase 3 adds deterministic baseline generation while preserving dependency direction:
+
+- `TelluricWorld` owns generic chunk orchestration and aggregate payload reports.
+- `TelluricTerrain` owns deterministic terrain generation.
+- `TelluricBiomes` owns deterministic biome resolving and the terrain+biome component adapter.
+
 ### Runtime and contract modules
 
 ```text

@@ -100,3 +100,12 @@ Biome validation checks:
 ## Contract-Only Boundary
 
 The protocols `TerrainGenerating` and `BiomeResolving` are boundaries for later generation systems. Phase 2 does not provide generator implementations, biome solvers, terrain recipes, erosion, hydrology, mesh compilation, streaming residency, or tool UI.
+
+Phase 3 implements the first concrete baseline behind these boundaries:
+
+- `DeterministicTerrainGenerator`
+- `DeterministicBiomeResolver`
+- `DeterministicTerrainBiomeChunkGenerator`
+- `DeterministicWorldGenerator`
+
+These implementations still produce only renderer-independent data contracts. They do not add streaming, mesh data, GPU resources, app code, gameplay, or tools UI.

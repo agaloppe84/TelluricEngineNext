@@ -55,6 +55,8 @@ If the stable hashing algorithm ever changes, affected persisted formats and gol
 
 World, terrain, and biome payload hashers add their own domain/version strings before ordered payload content. Payload hashes must include only deterministic contract data and must not include renderer resources, memory addresses, object identity, dictionary iteration order, or process-local values.
 
+Phase 3 deterministic generators preserve those payload hash domains while adding producer algorithms. Terrain and biome baseline value-noise fields derive lattice values through `WorldGenerationContext.derivedSeed`, explicit namespaces, and integer world coordinates. Adjacent chunks therefore agree on shared boundary samples without sharing mutable RNG state.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

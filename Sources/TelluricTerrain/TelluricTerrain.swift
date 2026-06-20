@@ -98,6 +98,12 @@ public struct TerrainGenerationSettings: Codable, Equatable, Hashable, Sendable,
     public let profile: NamespaceID
     public let heightScale: Float
 
+    /// Baseline deterministic terrain profile.
+    public static let baseline = TerrainGenerationSettings(
+        profile: NamespaceID("terrain.baseline.v1"),
+        heightScale: 1
+    )
+
     public init(profile: NamespaceID, heightScale: Float) {
         self.profile = profile
         self.heightScale = heightScale
@@ -291,5 +297,189 @@ public enum TerrainHasher {
         hasher.combine(heightSummary)
         hasher.combine(heightField)
         return hasher.finalize()
+    }
+}
+
+/// Successful deterministic terrain generation result.
+public struct TerrainGenerationResult: Codable, Equatable, Hashable, Sendable {
+    /// Generated renderer-independent terrain payload.
+    public let payload: TerrainPayload
+
+    /// Validation issues observed after generation.
+    public let validationIssues: [TerrainValidationIssue]
+
+    /// Creates a terrain generation result.
+    public init(payload: TerrainPayload, validationIssues: [TerrainValidationIssue]) {
+        self.payload = payload
+        self.validationIssues = validationIssues
+    }
+}
+
+/// Baseline deterministic terrain generator.
+public struct DeterministicTerrainGenerator: TerrainGenerating, Sendable {
+    /// Creates the baseline terrain generator.
+    public init() {}
+
+    /// Builds a valid deterministic terrain payload for `chunkCoord`.
+    public func generateTerrain(
+        context: WorldGenerationContext,
+        chunkCoord: ChunkCoord,
+        settings: TerrainGenerationSettings
+    ) -> TerrainPayload {
+        generateTerrainResult(
+            context: context,
+            chunkCoord: chunkCoord,
+            settings: settings
+        ).payload
+    }
+
+    /// Builds a deterministic terrain payload and exposes validation issues.
+    public func generateTerrainResult(
+        context: WorldGenerationContext,
+        chunkCoord: ChunkCoord,
+        settings: TerrainGenerationSettings
+    ) -> TerrainGenerationResult {
+        precondition(context.config.chunkSize > 0, "WorldConfig.chunkSize must be positive")
+        precondition(context.config.verticalScale.isFinite && context.config.verticalScale > 0, "WorldConfig.verticalScale must be finite and positive")
+        precondition(settings.heightScale.isFinite && settings.heightScale > 0, "TerrainGenerationSettings.heightScale must be finite and positive")
+
+        let dimension = context.config.chunkSize + 1
+        let originX = chunkCoord.x * Int64(context.config.chunkSize)
+        let originZ = chunkCoord.z * Int64(context.config.chunkSize)
+        var samples: [HeightSample] = []
+        samples.reserveCapacity(dimension * dimension)
+
+        for z in 0..<dimension {
+            for x in 0..<dimension {
+                let worldX = originX + Int64(x)
+                let worldZ = originZ + Int64(z)
+                let height = Self.heightAtWorldSample(
+                    context: context,
+                    chunkY: chunkCoord.y,
+                    worldX: worldX,
+                    worldZ: worldZ,
+                    settings: settings
+                )
+                samples.append(HeightSample(height: height))
+            }
+        }
+
+        let heightField = HeightField(width: dimension, depth: dimension, samples: samples)
+        let validationIssues = TerrainValidation.validate(heightField: heightField, chunkCoord: chunkCoord)
+        precondition(!validationIssues.contains { $0.severity == .error }, "DeterministicTerrainGenerator produced invalid terrain")
+
+        let payload = TerrainPayload(
+            chunkCoord: chunkCoord,
+            heightField: heightField,
+            settings: settings
+        )
+
+        return TerrainGenerationResult(
+            payload: payload,
+            validationIssues: TerrainValidation.validate(payload: payload, expectedChunkCoord: chunkCoord)
+        )
+    }
+
+    /// Samples the deterministic baseline height function at integer world coordinates.
+    public static func heightAtWorldSample(
+        context: WorldGenerationContext,
+        chunkY: Int64,
+        worldX: Int64,
+        worldZ: Int64,
+        settings: TerrainGenerationSettings
+    ) -> Float {
+        let chunkSize = context.config.chunkSize
+        let lowCellSize = max(4, chunkSize * 4)
+        let midCellSize = max(2, chunkSize * 2)
+        let detailCellSize = max(2, chunkSize)
+
+        let low = TerrainValueNoise.sample(
+            context: context,
+            namespace: NamespaceID("terrain.baseline.low"),
+            chunkY: chunkY,
+            worldX: worldX,
+            worldZ: worldZ,
+            cellSize: lowCellSize
+        )
+        let mid = TerrainValueNoise.sample(
+            context: context,
+            namespace: NamespaceID("terrain.baseline.mid"),
+            chunkY: chunkY,
+            worldX: worldX,
+            worldZ: worldZ,
+            cellSize: midCellSize
+        )
+        let detail = TerrainValueNoise.sample(
+            context: context,
+            namespace: NamespaceID("terrain.baseline.detail"),
+            chunkY: chunkY,
+            worldX: worldX,
+            worldZ: worldZ,
+            cellSize: detailCellSize
+        )
+
+        let combined = low * 0.60 + mid * 0.30 + detail * 0.10
+        let centered = combined * 2 - 1
+        return centered * context.config.verticalScale * settings.heightScale
+    }
+}
+
+private enum TerrainValueNoise {
+    static func sample(
+        context: WorldGenerationContext,
+        namespace: NamespaceID,
+        chunkY: Int64,
+        worldX: Int64,
+        worldZ: Int64,
+        cellSize: Int
+    ) -> Float {
+        precondition(cellSize > 0, "cellSize must be positive")
+
+        let size = Int64(cellSize)
+        let cellX = floorDiv(worldX, by: size)
+        let cellZ = floorDiv(worldZ, by: size)
+        let localX = Float(floorMod(worldX, by: size)) / Float(cellSize)
+        let localZ = Float(floorMod(worldZ, by: size)) / Float(cellSize)
+        let tx = smooth(localX)
+        let tz = smooth(localZ)
+
+        let v00 = latticeValue(context: context, namespace: namespace, x: cellX, y: chunkY, z: cellZ)
+        let v10 = latticeValue(context: context, namespace: namespace, x: cellX + 1, y: chunkY, z: cellZ)
+        let v01 = latticeValue(context: context, namespace: namespace, x: cellX, y: chunkY, z: cellZ + 1)
+        let v11 = latticeValue(context: context, namespace: namespace, x: cellX + 1, y: chunkY, z: cellZ + 1)
+
+        let a = lerp(v00, v10, t: tx)
+        let b = lerp(v01, v11, t: tx)
+        return lerp(a, b, t: tz)
+    }
+
+    private static func latticeValue(
+        context: WorldGenerationContext,
+        namespace: NamespaceID,
+        x: Int64,
+        y: Int64,
+        z: Int64
+    ) -> Float {
+        let seed = context.derivedSeed(
+            namespace: namespace,
+            coordinates: Int3(x: x, y: y, z: z)
+        )
+        var rng = DeterministicRNG(seed: seed)
+        return rng.nextUnitFloat()
+    }
+
+    private static func smooth(_ t: Float) -> Float {
+        t * t * (3 - 2 * t)
+    }
+
+    private static func floorDiv(_ value: Int64, by divisor: Int64) -> Int64 {
+        let quotient = value / divisor
+        let remainder = value % divisor
+        return remainder < 0 ? quotient - 1 : quotient
+    }
+
+    private static func floorMod(_ value: Int64, by divisor: Int64) -> Int64 {
+        let remainder = value % divisor
+        return remainder >= 0 ? remainder : remainder + divisor
     }
 }
