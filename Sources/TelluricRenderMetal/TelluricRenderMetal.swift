@@ -823,18 +823,18 @@ public struct MetalDebugLineRenderPipeline: @unchecked Sendable {
         constant TelluricDebugLineUniforms& uniforms [[buffer(1)]],
         uint vertexID [[vertex_id]]
     ) {
-        TelluricDebugLineVertex vertex = vertices[vertexID];
-        float clipX = (vertex.positionX - uniforms.centerX) / uniforms.halfExtentX;
-        float clipY = (vertex.positionZ - uniforms.centerZ) / uniforms.halfExtentZ;
+        TelluricDebugLineVertex debugVertex = vertices[vertexID];
+        float clipX = (debugVertex.positionX - uniforms.centerX) / uniforms.halfExtentX;
+        float clipY = (debugVertex.positionZ - uniforms.centerZ) / uniforms.halfExtentZ;
 
-        TelluricDebugLineOutput output;
-        output.position = float4(clipX, clipY, 0.0, 1.0);
-        output.color = float4(vertex.red, vertex.green, vertex.blue, vertex.alpha);
-        return output;
+        TelluricDebugLineOutput lineOutput;
+        lineOutput.position = float4(clipX, clipY, 0.0, 1.0);
+        lineOutput.color = float4(debugVertex.red, debugVertex.green, debugVertex.blue, debugVertex.alpha);
+        return lineOutput;
     }
 
-    fragment float4 telluric_debug_line_fragment(TelluricDebugLineOutput input [[stage_in]]) {
-        return input.color;
+    fragment float4 telluric_debug_line_fragment(TelluricDebugLineOutput lineInput [[stage_in]]) {
+        return lineInput.color;
     }
     """
 

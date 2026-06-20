@@ -187,6 +187,22 @@ final class MetalBackendTests: XCTestCase {
         }
     }
 
+    func testEmbeddedDebugLineShaderDoesNotUseReservedKeywordLocals() throws {
+        let root = try packageRoot()
+        let source = root
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("TelluricRenderMetal")
+            .appendingPathComponent("TelluricRenderMetal.swift")
+        let contents = try String(contentsOf: source, encoding: .utf8)
+
+        XCTAssertFalse(contents.contains("TelluricDebugLineVertex vertex ="))
+        XCTAssertFalse(contents.contains("float4 vertex ="))
+        XCTAssertFalse(contents.contains("float4 fragment ="))
+        XCTAssertTrue(contents.contains("TelluricDebugLineVertex debugVertex ="))
+        XCTAssertTrue(contents.contains("debugVertex.positionX"))
+        XCTAssertTrue(contents.contains("debugVertex.red"))
+    }
+
     func testDebugLineBufferCreationHandlesMetalAvailability() {
         let batch = MetalDebugLinePipeline.makeBatch(lines: [
             DebugLine(start: .zero, end: Float3(x: 1, y: 0, z: 0), color: .blue),
