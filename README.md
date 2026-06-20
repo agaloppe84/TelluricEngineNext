@@ -33,3 +33,13 @@ chmod +x scripts/*.sh
 Then open this folder/repo with Codex.
 
 Do not ask Codex to start from an empty global context. It must work inside this repository.
+
+## Seed validator
+
+The first CLI engine tool validates deterministic world generation over a chunk grid:
+
+```sh
+swift run telluric-seed-validator --seed 12345 --radius 2 --chunk-size 32 --vertical-scale 12 --report Tools/benchmarks/seed_12345.json
+```
+
+Use the repo-local scripts for normal validation. `./scripts/check-architecture-guards.sh` includes a tiny seed validator smoke run and writes its generated report under ignored `Tools/benchmarks/` output.

@@ -67,12 +67,17 @@ TelluricRender -> TelluricCore, TelluricMath, TelluricAssets
 ### Tools CLI targets
 
 ```text
-TelluricSeedValidator -> TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricDiagnostics
+TelluricSeedValidator -> TelluricSeedValidatorCore
+TelluricSeedValidatorCore -> TelluricCore, TelluricDeterminism, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricDiagnostics
 TelluricAssetCooker -> TelluricAssets, TelluricDiagnostics
 TelluricReplayInspector -> TelluricRuntime, TelluricSimulation, TelluricDiagnostics
 ```
 
-These are command-line target boundaries only in Phase 0. They must not contain UI or real tool behavior yet.
+`TelluricSeedValidatorCore` is a testable tool-support target, not an engine module. Engine modules must not import it.
+
+Phase 4 implements `telluric-seed-validator` as the first real CLI engine tool. It validates deterministic terrain+biome chunk generation over an ordered grid and writes deterministic JSON reports without app, UI, rendering, gameplay, or Metal dependencies.
+
+`TelluricAssetCooker` and `TelluricReplayInspector` remain command-line target boundaries only until their tool phases.
 
 ## 2. Deferred Targets
 
@@ -108,3 +113,5 @@ Phase 0 architecture guards must fail if:
 - SwiftUI, AppKit, Metal, MetalKit, AVFoundation, CoreAudio, or GameplayKit are imported in Phase 0 sources;
 - deterministic/procedural modules use `random(in:)`, `UUID()`, or `Date()`;
 - engine modules import app, game, or tool modules.
+
+Phase 4 also runs a tiny repo-local seed validator smoke check from `scripts/check-architecture-guards.sh`.

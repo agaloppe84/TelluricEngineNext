@@ -9,6 +9,7 @@ import TelluricMath
 import TelluricPersistence
 import TelluricRender
 import TelluricRuntime
+import TelluricSeedValidatorCore
 import TelluricSimulation
 import TelluricStreaming
 import TelluricTerrain

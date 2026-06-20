@@ -57,6 +57,14 @@ World, terrain, and biome payload hashers add their own domain/version strings b
 
 Phase 3 deterministic generators preserve those payload hash domains while adding producer algorithms. Terrain and biome baseline value-noise fields derive lattice values through `WorldGenerationContext.derivedSeed`, explicit namespaces, and integer world coordinates. Adjacent chunks therefore agree on shared boundary samples without sharing mutable RNG state.
 
+Phase 4 seed validation reports add a CLI report hash domain:
+
+```text
+Telluric.SeedValidationReport.v1
+```
+
+The report hash is derived from ordered configuration fields, chunk coordinates, per-chunk payload hashes, component hashes, success state, and ordered diagnostics. It excludes timestamps, process-local values, performance timing, and unordered container traversal.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

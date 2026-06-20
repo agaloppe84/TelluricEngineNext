@@ -137,9 +137,25 @@ Validation APIs return ordered issue arrays or reports so future CLIs can serial
 
 ## Future Consumers
 
-The contracts are designed for future:
+Phase 4 adds the first CLI consumer:
 
-- seed validators;
+```text
+telluric-seed-validator
+  -> DeterministicWorldGenerator
+  -> ordered ChunkWorldPayload results
+  -> SeedValidationReport
+```
+
+The validator checks a square grid in deterministic `z` then `x` order, records ordered diagnostics, stores per-chunk payload hashes, and computes a report root hash using:
+
+```text
+Telluric.SeedValidationReport.v1
+```
+
+The report intentionally omits timestamps and timing data so JSON output can be diffed across runs.
+
+The contracts are also designed for future:
+
 - world labs;
 - terrain and biome generation jobs;
 - streaming planners;

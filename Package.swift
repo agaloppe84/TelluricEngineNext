@@ -19,7 +19,7 @@ let package = Package(
         .library(name: "TelluricPersistence", targets: ["TelluricPersistence"]),
         .library(name: "TelluricRuntime", targets: ["TelluricRuntime"]),
         .library(name: "TelluricRender", targets: ["TelluricRender"]),
-        .executable(name: "TelluricSeedValidator", targets: ["TelluricSeedValidator"]),
+        .executable(name: "telluric-seed-validator", targets: ["TelluricSeedValidator"]),
         .executable(name: "TelluricAssetCooker", targets: ["TelluricAssetCooker"]),
         .executable(name: "TelluricReplayInspector", targets: ["TelluricReplayInspector"]),
     ],
@@ -42,7 +42,8 @@ let package = Package(
         .target(name: "TelluricRuntime", dependencies: ["TelluricCore", "TelluricDiagnostics", "TelluricAssets", "TelluricSimulation", "TelluricWorld", "TelluricTerrain", "TelluricBiomes", "TelluricStreaming", "TelluricPersistence"]),
         .target(name: "TelluricRender", dependencies: ["TelluricCore", "TelluricMath", "TelluricAssets"]),
 
-        .executableTarget(name: "TelluricSeedValidator", dependencies: ["TelluricWorld", "TelluricTerrain", "TelluricBiomes", "TelluricDiagnostics"]),
+        .target(name: "TelluricSeedValidatorCore", dependencies: ["TelluricCore", "TelluricDeterminism", "TelluricWorld", "TelluricTerrain", "TelluricBiomes", "TelluricDiagnostics"]),
+        .executableTarget(name: "TelluricSeedValidator", dependencies: ["TelluricSeedValidatorCore"]),
         .executableTarget(name: "TelluricAssetCooker", dependencies: ["TelluricAssets", "TelluricDiagnostics"]),
         .executableTarget(name: "TelluricReplayInspector", dependencies: ["TelluricRuntime", "TelluricSimulation", "TelluricDiagnostics"]),
 
@@ -63,6 +64,7 @@ let package = Package(
                 "TelluricPersistence",
                 "TelluricRuntime",
                 "TelluricRender",
+                "TelluricSeedValidatorCore",
             ]
         ),
     ]

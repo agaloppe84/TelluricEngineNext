@@ -25,6 +25,7 @@ if [ -d Sources ]; then
     TelluricPersistence
     TelluricRuntime
     TelluricRender
+    TelluricSeedValidatorCore
     TelluricSeedValidator
     TelluricAssetCooker
     TelluricReplayInspector
@@ -77,6 +78,7 @@ if [ -d Sources ]; then
     Sources/TelluricTerrain
     Sources/TelluricBiomes
     Sources/TelluricStreaming
+    Sources/TelluricSeedValidatorCore
   )
 
   for deterministic_dir in "${deterministic_dirs[@]}"; do
@@ -108,8 +110,8 @@ if [ -d Sources ]; then
   for engine_dir in "${engine_dirs[@]}"; do
     [ -d "$engine_dir" ] || continue
 
-    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
-      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
+    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
+      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
       fail "$engine_dir imports app/game/tool modules"
     fi
   done
@@ -138,6 +140,10 @@ script_command_pattern="(^|[;&|[:space:]])($(IFS='|'; echo "${forbidden_script_c
 if grep -R -n -E "$script_command_pattern" scripts --include="*.sh" >/dev/null 2>&1; then
   grep -R -n -E "$script_command_pattern" scripts --include="*.sh" >&2
   fail "unsafe command invocation appears in scripts"
+fi
+
+if [ -f Package.swift ] && [ -d Sources/TelluricSeedValidator ]; then
+  bash scripts/seed-validator-smoke-safe.sh
 fi
 
 echo "Architecture guards OK"
