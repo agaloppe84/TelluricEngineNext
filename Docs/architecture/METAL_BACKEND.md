@@ -3,6 +3,7 @@
 Phase 12 introduced `TelluricRenderMetal`, the isolated Metal backend module.
 Phase 13 adds the first backend-level debug line preparation path.
 Phase 17 adds the first minimal drawable debug-line render pass.
+Phase 18 hardens app-shell visual smoke reporting around that drawable path.
 
 This is the backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
 
@@ -99,7 +100,7 @@ When Metal is unavailable, CPU conversion still works and buffer creation report
 
 Phase 15 adds `telluric-headless-loop` as a top-level CLI client of this backend. The tool passes extracted `RenderSnapshot` values into `MetalRenderBackend` and records prepared debug line counts. In GPU-less or sandboxed environments, Metal unavailable and debug-line buffer unavailable diagnostics are treated as non-fatal warnings by the tool so the game/runtime/render-extraction chain can still be validated.
 
-Phase 16 adds `telluric-game-app` as a top-level macOS host. Phase 17 lets that app provide the current `MTKView` drawable and render pass descriptor to the backend.
+Phase 16 adds `telluric-game-app` as a top-level macOS host. Phase 17 lets that app provide the current `MTKView` drawable and render pass descriptor to the backend. Phase 18 adds bounded app smoke/reporting around the same API without moving app lifecycle into the backend.
 
 ## Drawable Debug Line Pass
 
@@ -167,6 +168,8 @@ Metal backend tests are split between CPU-only behavior and conditional GPU beha
 CPU tests validate debug line conversion, ordering, coordinate preservation, color preservation, invalid coordinate diagnostics, and empty batch success. GPU buffer tests attempt `MetalDeviceContext.makeResult()` and only require an `MTLBuffer` when a Metal device is actually available. No test requires a display, window, drawable, `MTKView`, app lifecycle, or platform UI.
 
 Drawable-path tests validate descriptor encoding, pipeline build-or-diagnose behavior, missing drawable diagnostics, and empty drawable-pass diagnostics without requiring a visible window.
+
+App-shell smoke tests stay above the backend. They validate argument parsing, no-window smoke reports, and import boundaries without requiring a visible `MTKView`. A local user can run `./scripts/game-app-safe.sh --run` to visually verify that debug chunk boundaries draw when Metal and a drawable are available.
 
 ## Not Implemented In Phase 17
 

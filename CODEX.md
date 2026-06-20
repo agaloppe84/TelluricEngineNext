@@ -45,7 +45,8 @@ Use:
 ./scripts/swift-test-safe.sh
 ./scripts/check-architecture-guards.sh
 ./scripts/game-app-safe.sh --dry-run
-./scripts/game-app-safe.sh --smoke
+./scripts/game-app-safe.sh --smoke --frames 3
+./scripts/game-app-safe.sh --script-help
 ```
 
 Do not use direct global setup commands.

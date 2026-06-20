@@ -305,7 +305,7 @@ GameInputFrame
 
 This is a validation executable, not the runtime app. It creates no window, drawable, `MTKView`, app bundle, platform input layer, or gameplay system.
 
-Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. The app still does not implement platform input, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
+Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. Phase 18 hardens the local safe run, bounded smoke, and diagnostics-report workflow so the user can visually verify the debug chunk grid on a Mac. The app still does not implement platform input, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
 
 ## 6. What changed from the first attempt
 
@@ -352,9 +352,10 @@ Procedural systems testable before rendering
 15. Headless end-to-end game loop
 16. Minimal macOS app shell
 17. Minimal drawable debug-line render pass
-18. ReplayInspector behavior
-19. WorldLab
-20. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+18. Visual smoke and app run hardening
+19. ReplayInspector behavior
+20. WorldLab
+21. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

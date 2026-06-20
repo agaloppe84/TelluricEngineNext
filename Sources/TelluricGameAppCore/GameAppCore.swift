@@ -78,6 +78,18 @@ public struct GameAppConfig: Codable, Equatable, Sendable {
     }
 }
 
+/// App-shell execution mode selected by command-line arguments.
+public enum GameAppRunMode: String, Codable, CaseIterable, Sendable {
+    /// Runs the engine pipeline without creating a window.
+    case dryRun
+
+    /// Runs a bounded no-window smoke pass.
+    case smoke
+
+    /// Runs the macOS window host.
+    case run
+}
+
 /// Parsed command-line arguments for `telluric-game-app`.
 public struct GameAppArguments: Equatable, Sendable {
     /// App shell configuration.
@@ -89,8 +101,14 @@ public struct GameAppArguments: Equatable, Sendable {
     /// Runs a one-frame no-window smoke path.
     public let smoke: Bool
 
-    /// Number of deterministic ticks to execute in dry-run mode.
-    public let dryRunTicks: Int
+    /// True when the macOS window host was explicitly requested.
+    public let run: Bool
+
+    /// Optional bounded frame count for dry-run, smoke, or app run modes.
+    public let frameLimit: Int?
+
+    /// Optional repo-relative JSON diagnostics report path.
+    public let diagnosticsReportPath: String?
 
     /// Prints per-frame summary lines.
     public let verbose: Bool
@@ -103,16 +121,38 @@ public struct GameAppArguments: Equatable, Sendable {
         config: GameAppConfig = .default,
         dryRun: Bool = false,
         smoke: Bool = false,
-        dryRunTicks: Int = 1,
+        run: Bool = false,
+        frameLimit: Int? = nil,
+        diagnosticsReportPath: String? = nil,
         verbose: Bool = false,
         help: Bool = false
     ) {
         self.config = config
         self.dryRun = dryRun
         self.smoke = smoke
-        self.dryRunTicks = dryRunTicks
+        self.run = run
+        self.frameLimit = frameLimit
+        self.diagnosticsReportPath = diagnosticsReportPath
         self.verbose = verbose
         self.help = help
+    }
+
+    /// Selected execution mode.
+    public var mode: GameAppRunMode {
+        if smoke {
+            return .smoke
+        }
+
+        if dryRun {
+            return .dryRun
+        }
+
+        return .run
+    }
+
+    /// Number of frames to run in no-window modes.
+    public var noWindowFrameCount: Int {
+        frameLimit ?? 1
     }
 }
 
@@ -141,7 +181,9 @@ public enum GameAppArgumentParser {
         var config = GameAppConfig.default
         var dryRun = false
         var smoke = false
-        var dryRunTicks = 1
+        var run = false
+        var frameLimit: Int?
+        var diagnosticsReportPath: String?
         var verbose = false
         var help = false
 
@@ -156,12 +198,23 @@ public enum GameAppArgumentParser {
 
             case "--dry-run":
                 dryRun = true
+                smoke = false
+                run = false
                 index += 1
 
             case "--smoke":
                 dryRun = true
                 smoke = true
-                dryRunTicks = 1
+                run = false
+                if frameLimit == nil {
+                    frameLimit = 1
+                }
+                index += 1
+
+            case "--run":
+                dryRun = false
+                smoke = false
+                run = true
                 index += 1
 
             case "--verbose":
@@ -226,7 +279,7 @@ public enum GameAppArgumentParser {
                 config = config.with(verticalScale: parsed)
                 index += 2
 
-            case "--ticks":
+            case "--frames", "--ticks":
                 let value = try value(after: option, index: index, arguments: arguments)
                 guard let parsed = Int(value), parsed > 0 else {
                     throw GameAppArgumentError.invalidValue(
@@ -235,7 +288,11 @@ public enum GameAppArgumentParser {
                         reason: "Expected a positive integer."
                     )
                 }
-                dryRunTicks = parsed
+                frameLimit = parsed
+                index += 2
+
+            case "--diagnostics-report":
+                diagnosticsReportPath = try value(after: option, index: index, arguments: arguments)
                 index += 2
 
             default:
@@ -243,15 +300,13 @@ public enum GameAppArgumentParser {
             }
         }
 
-        if smoke {
-            dryRunTicks = 1
-        }
-
         return GameAppArguments(
             config: config,
             dryRun: dryRun,
             smoke: smoke,
-            dryRunTicks: dryRunTicks,
+            run: run,
+            frameLimit: frameLimit,
+            diagnosticsReportPath: diagnosticsReportPath,
             verbose: verbose,
             help: help
         )
@@ -271,7 +326,7 @@ public enum GameAppArgumentParser {
 public enum GameAppHelp {
     public static let text = """
     Usage:
-      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--dry-run|--smoke] [--ticks <Int>] [--verbose]
+      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--dry-run|--smoke|--run] [--frames <Int>] [--diagnostics-report <path>] [--verbose]
 
     Options:
       --seed <UInt64>           Root deterministic world seed. Defaults to 1.
@@ -279,8 +334,11 @@ public enum GameAppHelp {
       --chunk-size <Int>       Positive chunk cell size. Defaults to 16.
       --vertical-scale <Float> Finite positive vertical terrain scale. Defaults to 8.
       --dry-run                Run the pipeline without opening a window.
-      --smoke                  Run one no-window smoke frame.
-      --ticks <Int>            Positive dry-run tick count. Defaults to 1.
+      --smoke                  Run a bounded no-window smoke pass.
+      --run                    Open the minimal macOS app window.
+      --frames <Int>           Positive bounded frame count. Defaults to 1 for dry-run/smoke; app run is unbounded unless set.
+      --diagnostics-report <path>
+                                Write a repo-relative JSON diagnostics report.
       --verbose                Print ordered frame hashes.
       --help, -h               Show this help text.
     """
@@ -371,8 +429,9 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
 
 /// Deterministic result from running the app shell pipeline without a window.
 public struct GameAppDryRunResult: Codable, Equatable, Sendable {
+    public let mode: GameAppRunMode
     public let config: GameAppConfig
-    public let tickCount: Int
+    public let framesRequested: Int
     public let metalAvailability: GameAppMetalSummary
     public let frames: [GameAppFrameResult]
     public let diagnosticsSummary: DiagnosticSummary
@@ -380,19 +439,178 @@ public struct GameAppDryRunResult: Codable, Equatable, Sendable {
 
     /// Creates a dry-run result.
     public init(
+        mode: GameAppRunMode,
         config: GameAppConfig,
-        tickCount: Int,
+        framesRequested: Int,
         metalAvailability: GameAppMetalSummary,
         frames: [GameAppFrameResult],
         diagnosticsSummary: DiagnosticSummary,
         success: Bool
     ) {
+        self.mode = mode
         self.config = config
-        self.tickCount = tickCount
+        self.framesRequested = framesRequested
         self.metalAvailability = metalAvailability
         self.frames = frames
         self.diagnosticsSummary = diagnosticsSummary
         self.success = success
+    }
+}
+
+/// One ordered frame entry in an app-shell diagnostics report.
+public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
+    public let frameNumber: Int
+    public let runtimeFrameIndex: FrameIndex
+    public let simulationTick: TickIndex
+    public let runtimeHash: StableHash
+    public let renderSnapshotHash: StableHash
+    public let debugLinesExtracted: Int
+    public let debugVerticesPrepared: Int
+    public let mtkViewAvailable: Bool
+    public let drawableAvailable: Bool
+    public let drawCallAttempted: Bool
+    public let drawCallSucceeded: Bool
+    public let diagnosticsSummary: DiagnosticSummary
+    public let success: Bool
+
+    /// Creates an ordered app-shell frame summary.
+    public init(
+        frameNumber: Int,
+        frameResult: GameAppFrameResult,
+        mtkViewAvailable: Bool,
+        drawableAvailable: Bool,
+        drawCallAttempted: Bool,
+        drawCallSucceeded: Bool,
+        extraDiagnostics: [DiagnosticMessage] = []
+    ) {
+        precondition(frameNumber >= 0, "frameNumber must be non-negative")
+        let diagnostics = frameResult.diagnostics + extraDiagnostics
+        let report = DiagnosticReport(messages: diagnostics)
+
+        self.frameNumber = frameNumber
+        self.runtimeFrameIndex = frameResult.runtimeFrameIndex
+        self.simulationTick = frameResult.simulationTick
+        self.runtimeHash = frameResult.runtimeHash
+        self.renderSnapshotHash = frameResult.renderSnapshotHash
+        self.debugLinesExtracted = frameResult.preparedDebugLineCount
+        self.debugVerticesPrepared = frameResult.preparedDebugLineVertexCount
+        self.mtkViewAvailable = mtkViewAvailable
+        self.drawableAvailable = drawableAvailable
+        self.drawCallAttempted = drawCallAttempted
+        self.drawCallSucceeded = drawCallSucceeded
+        self.diagnosticsSummary = report.summary
+        self.success = frameResult.success && drawCallSucceeded == drawCallAttempted && !report.hasErrors
+    }
+}
+
+/// Deterministic-friendly diagnostics report for app-shell dry, smoke, and run paths.
+public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
+    public let toolName: String
+    public let engineVersion: EngineVersion
+    public let mode: GameAppRunMode
+    public let seed: UInt64
+    public let radius: Int
+    public let chunkSize: Int
+    public let verticalScale: Float
+    public let framesRequested: Int?
+    public let framesSimulated: Int
+    public let framesRendered: Int
+    public let metalAvailability: GameAppMetalSummary
+    public let mtkViewAvailable: Bool
+    public let drawableAvailable: Bool
+    public let debugLinesExtracted: Int
+    public let debugVerticesPrepared: Int
+    public let drawCallsAttempted: Int
+    public let drawCallsSucceeded: Int
+    public let diagnosticsSummary: DiagnosticSummary
+    public let diagnostics: [DiagnosticMessage]
+    public let frames: [GameAppVisualFrameSummary]
+    public let success: Bool
+
+    /// Creates an app-shell diagnostics report.
+    public init(
+        toolName: String = "telluric-game-app",
+        engineVersion: EngineVersion = GameAppRuntime.engineVersion,
+        mode: GameAppRunMode,
+        config: GameAppConfig,
+        framesRequested: Int?,
+        metalAvailability: GameAppMetalSummary,
+        mtkViewAvailable: Bool,
+        drawableAvailable: Bool,
+        frames: [GameAppVisualFrameSummary],
+        diagnostics: [DiagnosticMessage]
+    ) {
+        let diagnosticReport = DiagnosticReport(messages: diagnostics)
+        self.toolName = toolName
+        self.engineVersion = engineVersion
+        self.mode = mode
+        self.seed = config.seed
+        self.radius = config.radius
+        self.chunkSize = config.chunkSize
+        self.verticalScale = config.verticalScale
+        self.framesRequested = framesRequested
+        self.framesSimulated = frames.count
+        self.framesRendered = frames.filter(\.drawCallSucceeded).count
+        self.metalAvailability = metalAvailability
+        self.mtkViewAvailable = mtkViewAvailable
+        self.drawableAvailable = drawableAvailable
+        self.debugLinesExtracted = frames.last?.debugLinesExtracted ?? 0
+        self.debugVerticesPrepared = frames.last?.debugVerticesPrepared ?? 0
+        self.drawCallsAttempted = frames.filter(\.drawCallAttempted).count
+        self.drawCallsSucceeded = frames.filter(\.drawCallSucceeded).count
+        self.diagnosticsSummary = diagnosticReport.summary
+        self.diagnostics = diagnostics
+        self.frames = frames
+        self.success = !diagnosticReport.hasErrors && frames.allSatisfy(\.success)
+    }
+}
+
+/// Report path or write failure.
+public struct GameAppReportError: Error, Equatable, CustomStringConvertible, Sendable {
+    public let message: String
+
+    public var description: String {
+        message
+    }
+
+    public init(_ message: String) {
+        self.message = message
+    }
+}
+
+/// JSON report writer for repo-local app-shell diagnostics.
+public enum GameAppReportWriter {
+    /// Writes a deterministic-friendly JSON diagnostics report to a repo-relative path.
+    public static func write(_ report: GameAppDiagnosticsReport, to path: String) throws {
+        let url = try reportURL(for: path)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        var data = try encoder.encode(report)
+        data.append(0x0A)
+        try data.write(to: url, options: [.atomic])
+    }
+
+    private static func reportURL(for path: String) throws -> URL {
+        guard !path.isEmpty else {
+            throw GameAppReportError("Diagnostics report path must not be empty.")
+        }
+
+        guard !path.hasPrefix("/") && !path.hasPrefix("~") else {
+            throw GameAppReportError("Diagnostics report path must be repo-relative.")
+        }
+
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard !components.contains(where: { $0 == ".." }) else {
+            throw GameAppReportError("Diagnostics report path must not contain '..'.")
+        }
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        return root.appendingPathComponent(path, isDirectory: false)
     }
 }
 
@@ -468,7 +686,7 @@ public struct GameAppPipeline: Sendable {
     }
 
     /// Steps one deterministic frame and returns the render snapshot for drawable hosts.
-    public mutating func stepForRendering() -> GameAppRenderableFrame {
+    public mutating func stepForRendering(drawableRequested: Bool = false) -> GameAppRenderableFrame {
         let tick = nextTick
         let gameStep = session.step(GameStepInput(
             gameInputFrame: Self.gameInputFrame(tick: tick, entityID: controlledEntityID)
@@ -487,7 +705,9 @@ public struct GameAppPipeline: Sendable {
         var diagnostics = gameStep.diagnostics.messages
             + extraction.diagnostics.messages
             + Self.normalizedMetalDiagnostics(from: metalFrame.diagnostics.messages)
-        diagnostics.append(Self.drawableNotImplementedDiagnostic())
+        if !drawableRequested {
+            diagnostics.append(Self.drawableNotRequestedDiagnostic())
+        }
 
         let diagnosticReport = DiagnosticReport(messages: diagnostics)
         let metalAccepted = Self.hasNoFatalMetalDiagnostics(metalFrame.diagnostics.messages)
@@ -506,7 +726,7 @@ public struct GameAppPipeline: Sendable {
             preparedDebugLineVertexCount: metalFrame.preparedDebugLineVertexCount,
             preparedDebugLineBufferByteLength: metalFrame.preparedDebugLineBufferByteLength,
             metalAvailable: metalBackend.isAvailable,
-            drawableRenderingImplemented: false,
+            drawableRenderingImplemented: drawableRequested,
             diagnosticsSummary: diagnosticReport.summary,
             diagnostics: diagnostics,
             success: success
@@ -726,7 +946,7 @@ public struct GameAppPipeline: Sendable {
         }
     }
 
-    private static func drawableNotImplementedDiagnostic() -> DiagnosticMessage {
+    private static func drawableNotRequestedDiagnostic() -> DiagnosticMessage {
         DiagnosticMessage(
             severity: .info,
             code: NamespaceID("game_app.drawable_rendering_not_requested"),
@@ -762,8 +982,9 @@ public enum GameAppRuntime {
     public static func dryRun(arguments: GameAppArguments) throws -> GameAppDryRunResult {
         var pipeline = try GameAppPipeline(config: arguments.config)
         var frames: [GameAppFrameResult] = []
+        let frameCount = arguments.noWindowFrameCount
 
-        for _ in 0..<arguments.dryRunTicks {
+        for _ in 0..<frameCount {
             frames.append(pipeline.step())
         }
 
@@ -771,8 +992,9 @@ public enum GameAppRuntime {
         let diagnosticReport = DiagnosticReport(messages: diagnostics)
 
         return GameAppDryRunResult(
+            mode: arguments.mode,
             config: arguments.config,
-            tickCount: arguments.dryRunTicks,
+            framesRequested: frameCount,
             metalAvailability: GameAppMetalSummary(capabilities: pipeline.metalCapabilities),
             frames: frames,
             diagnosticsSummary: diagnosticReport.summary,
@@ -780,17 +1002,43 @@ public enum GameAppRuntime {
         )
     }
 
+    /// Builds a deterministic-friendly report for a no-window app-shell run.
+    public static func diagnosticsReport(for result: GameAppDryRunResult) -> GameAppDiagnosticsReport {
+        let frames = result.frames.enumerated().map { index, frame in
+            GameAppVisualFrameSummary(
+                frameNumber: index,
+                frameResult: frame,
+                mtkViewAvailable: false,
+                drawableAvailable: false,
+                drawCallAttempted: false,
+                drawCallSucceeded: false
+            )
+        }
+
+        return GameAppDiagnosticsReport(
+            mode: result.mode,
+            config: result.config,
+            framesRequested: result.framesRequested,
+            metalAvailability: result.metalAvailability,
+            mtkViewAvailable: false,
+            drawableAvailable: false,
+            frames: frames,
+            diagnostics: result.frames.flatMap(\.diagnostics)
+        )
+    }
+
     /// Creates a human-readable app-shell dry-run summary.
     public static func summary(for result: GameAppDryRunResult, verbose: Bool = false) -> String {
         var lines = [
-            "telluric-game-app dry-run",
+            "telluric-game-app \(result.mode.rawValue)",
             "seed: \(result.config.seed)",
             "radius: \(result.config.radius)",
             "chunk size: \(result.config.chunkSize)",
             "vertical scale: \(result.config.verticalScale)",
-            "ticks: \(result.tickCount)",
+            "frames requested: \(result.framesRequested)",
+            "frames simulated: \(result.frames.count)",
             "metal available: \(result.metalAvailability.isMetalAvailable)",
-            "drawable rendering implemented: false",
+            "drawable rendering requested: false",
             "diagnostics: info \(result.diagnosticsSummary.infos), warning \(result.diagnosticsSummary.warnings), error \(result.diagnosticsSummary.errors)",
             "success: \(result.success)",
         ]

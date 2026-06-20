@@ -2,6 +2,7 @@
 
 Phase 16 creates the first minimal macOS app shell for Telluric Engine Next.
 Phase 17 adds the first drawable debug-line render pass.
+Phase 18 hardens the local app run and visual smoke workflow.
 
 This is a SwiftPM executable host, not a traditional Xcode project or packaged app bundle. It exists to prove that the existing engine/game/runtime/render-extraction/Metal-preparation pipeline can be hosted visually without moving engine behavior into UI code.
 
@@ -15,7 +16,7 @@ TelluricGameApp -> TelluricGameAppCore -> TelluricGame -> TelluricRuntime -> eng
 
 Engine modules must not import `TelluricGameApp` or `TelluricGameAppCore`.
 
-`TelluricGameAppCore` is UI-free and testable. It owns the app-shell config, dry-run/smoke paths, stateful pipeline stepping, and renderer-independent frame values. `TelluricGameApp` owns only macOS process/window/view glue.
+`TelluricGameAppCore` is UI-free and testable. It owns the app-shell config, dry-run/smoke paths, stateful pipeline stepping, renderer-independent frame values, and deterministic-friendly diagnostics reports. `TelluricGameApp` owns only macOS process/window/view glue.
 
 ## App Shell vs Game Layer
 
@@ -52,24 +53,47 @@ The app shell can:
 
 The app currently shows a clear background plus flat chunk boundary debug lines. Those lines come from `RuntimeRenderExtractor` and are drawn through a debug-only top-down projection. They are not terrain meshes.
 
+When Metal and a drawable are available, the app submits those debug lines through `TelluricRenderMetal` and reports attempted/succeeded draw calls. When Metal is unavailable, the app reports that state clearly and the no-window smoke path remains valid.
+
 ## Safe Run
 
 Use the repo-local wrapper:
 
 ```sh
 ./scripts/game-app-safe.sh --dry-run
-./scripts/game-app-safe.sh --smoke
+./scripts/game-app-safe.sh --smoke --frames 120
 ```
 
 To open the minimal window from a local macOS shell:
 
 ```sh
-./scripts/game-app-safe.sh
+./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8
+./scripts/game-app-safe.sh --run --diagnostics-report Tools/benchmarks/game_app_visual_report.json
 ```
 
 The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under `.build/`. Raw `swift run` can use user-level SwiftPM cache and configuration paths, so wrappers are preferred for Codex and validation work.
 
+`./scripts/game-app-safe.sh --script-help` prints wrapper usage examples without launching the app.
+
 If Metal is unavailable, the app shell falls back to a plain view and no drawable rendering occurs. The no-window dry-run and smoke paths still validate the game/runtime/render-extraction/debug-line preparation chain.
+
+## Diagnostics Report
+
+`--diagnostics-report <path>` writes a JSON report to a repo-relative path such as `Tools/benchmarks/game_app_visual_report.json`.
+
+The report contains:
+
+- seed, radius, chunk size, and vertical scale;
+- requested and simulated frame counts;
+- Metal availability and command queue capability;
+- `MTKView` and drawable availability when known;
+- final debug line and vertex counts;
+- attempted and successful draw call counts;
+- ordered frame summaries;
+- ordered diagnostics and severity counts;
+- success state.
+
+The deterministic report section does not include wall-clock timestamps.
 
 ## Not Implemented Yet
 

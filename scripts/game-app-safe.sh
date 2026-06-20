@@ -4,6 +4,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+if [ "${1:-}" = "--script-help" ]; then
+  cat <<'USAGE'
+Usage:
+  ./scripts/game-app-safe.sh --dry-run
+  ./scripts/game-app-safe.sh --smoke --frames 120
+  ./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8
+  ./scripts/game-app-safe.sh --run --diagnostics-report Tools/benchmarks/game_app_visual_report.json
+
+The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under .build/.
+All other arguments are forwarded to telluric-game-app.
+USAGE
+  exit 0
+fi
+
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 export SWIFTPM_BUILD_DIR="$ROOT/.build/swiftpm"
 export SWIFTPM_CACHE_DIR="$ROOT/.build/swiftpm-cache"

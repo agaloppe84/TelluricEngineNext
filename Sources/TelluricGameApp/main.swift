@@ -2,6 +2,7 @@ import AppKit
 import Darwin
 import Metal
 import MetalKit
+import TelluricDiagnostics
 import TelluricGameAppCore
 import TelluricRenderMetal
 
@@ -20,6 +21,11 @@ enum TelluricGameAppMain {
             if arguments.dryRun {
                 let result = try GameAppRuntime.dryRun(arguments: arguments)
                 print(GameAppRuntime.summary(for: result, verbose: arguments.verbose))
+                if let reportPath = arguments.diagnosticsReportPath {
+                    let report = GameAppRuntime.diagnosticsReport(for: result)
+                    try GameAppReportWriter.write(report, to: reportPath)
+                    print("diagnostics report: \(reportPath)")
+                }
                 Darwin.exit(result.success ? EXIT_SUCCESS : EXIT_FAILURE)
             }
 
@@ -64,6 +70,7 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = arguments.config.windowTitle
         let loopDriver = GameAppLoopDriver(
+            arguments: arguments,
             pipeline: pipeline,
             verbose: arguments.verbose
         )
@@ -74,10 +81,18 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
 
         self.window = window
         self.loopDriver = loopDriver
+
+        if !loopDriver.mtkViewAvailable {
+            loopDriver.runWithoutDrawableFallback()
+            if arguments.frameLimit != nil {
+                loopDriver.writeReportIfRequested()
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        loopDriver?.stop()
+        loopDriver?.writeReportIfRequested()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -94,29 +109,45 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
             view.enableSetNeedsDisplay = false
             view.preferredFramesPerSecond = Int(arguments.config.framesPerSecond)
             view.delegate = loopDriver
+            loopDriver.setMTKViewAvailable(true)
             return view
         }
 
         let view = NSView(frame: frame)
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor(calibratedRed: 0.02, green: 0.025, blue: 0.03, alpha: 1).cgColor
+        loopDriver.setMTKViewAvailable(false)
         return view
     }
 }
 
 private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
+    private let arguments: GameAppArguments
     private var pipeline: GameAppPipeline
     private let verbose: Bool
     private var emittedInitialSummary = false
+    private var frameSummaries: [GameAppVisualFrameSummary] = []
+    private var diagnostics: [DiagnosticMessage] = []
+    private var reportWritten = false
+    private(set) var mtkViewAvailable = false
+    private var drawableEverAvailable = false
 
-    init(pipeline: GameAppPipeline, verbose: Bool) {
+    init(arguments: GameAppArguments, pipeline: GameAppPipeline, verbose: Bool) {
+        self.arguments = arguments
         self.pipeline = pipeline
         self.verbose = verbose
         super.init()
     }
 
+    func setMTKViewAvailable(_ available: Bool) {
+        mtkViewAvailable = available
+    }
+
     func draw(in view: MTKView) {
-        let frame = pipeline.stepForRendering()
+        let drawable = view.currentDrawable
+        let renderPassDescriptor = view.currentRenderPassDescriptor
+        let drawableAvailable = drawable != nil && renderPassDescriptor != nil
+        let frame = pipeline.stepForRendering(drawableRequested: true)
         let descriptor = frame.drawableDescriptor.withViewport(
             width: Swift.max(Int(view.drawableSize.width), 1),
             height: Swift.max(Int(view.drawableSize.height), 1)
@@ -124,18 +155,101 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
         let drawableResult = pipeline.metalRenderBackend.renderDrawable(
             snapshot: frame.renderSnapshot,
             descriptor: descriptor,
-            drawable: view.currentDrawable,
-            renderPassDescriptor: view.currentRenderPassDescriptor
+            drawable: drawable,
+            renderPassDescriptor: renderPassDescriptor
+        )
+        drawableEverAvailable = drawableEverAvailable || drawableAvailable
+
+        record(
+            frame: frame.frameResult,
+            mtkViewAvailable: true,
+            drawableAvailable: drawableAvailable,
+            drawCallAttempted: true,
+            drawCallSucceeded: drawableResult.success && drawableResult.presentedDrawable,
+            extraDiagnostics: drawableResult.diagnostics.messages
         )
 
         log(frame: frame.frameResult, drawableResult: drawableResult)
+
+        if let frameLimit = arguments.frameLimit, frameSummaries.count >= frameLimit {
+            writeReportIfRequested()
+            NSApplication.shared.terminate(nil)
+        }
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         _ = size
     }
 
-    func stop() {
+    func runWithoutDrawableFallback() {
+        let frames = Swift.max(arguments.frameLimit ?? 1, 1)
+        for _ in 0..<frames {
+            let frame = pipeline.stepForRendering(drawableRequested: false)
+            record(
+                frame: frame.frameResult,
+                mtkViewAvailable: false,
+                drawableAvailable: false,
+                drawCallAttempted: false,
+                drawCallSucceeded: false,
+                extraDiagnostics: []
+            )
+        }
+
+        if let finalFrame = frameSummaries.last {
+            print(
+                "telluric-game-app: Metal unavailable; opened fallback view. "
+                    + "frames simulated \(frameSummaries.count), "
+                    + "debug lines \(finalFrame.debugLinesExtracted), "
+                    + "diagnostics info \(finalFrame.diagnosticsSummary.infos) "
+                    + "warning \(finalFrame.diagnosticsSummary.warnings) "
+                    + "error \(finalFrame.diagnosticsSummary.errors)"
+            )
+        }
+    }
+
+    func writeReportIfRequested() {
+        guard let reportPath = arguments.diagnosticsReportPath, !reportWritten else {
+            return
+        }
+
+        do {
+            let report = GameAppDiagnosticsReport(
+                mode: arguments.mode,
+                config: arguments.config,
+                framesRequested: arguments.frameLimit,
+                metalAvailability: GameAppMetalSummary(capabilities: pipeline.metalCapabilities),
+                mtkViewAvailable: mtkViewAvailable,
+                drawableAvailable: drawableEverAvailable,
+                frames: frameSummaries,
+                diagnostics: diagnostics
+            )
+            try GameAppReportWriter.write(report, to: reportPath)
+            reportWritten = true
+            print("telluric-game-app diagnostics report: \(reportPath)")
+        } catch {
+            fputs("telluric-game-app diagnostics report failed: \(error)\n", stderr)
+        }
+    }
+
+    private func record(
+        frame: GameAppFrameResult,
+        mtkViewAvailable: Bool,
+        drawableAvailable: Bool,
+        drawCallAttempted: Bool,
+        drawCallSucceeded: Bool,
+        extraDiagnostics: [DiagnosticMessage]
+    ) {
+        diagnostics.append(contentsOf: frame.diagnostics)
+        diagnostics.append(contentsOf: extraDiagnostics)
+        frameSummaries.append(GameAppVisualFrameSummary(
+            frameNumber: frameSummaries.count,
+            frameResult: frame,
+            mtkViewAvailable: mtkViewAvailable,
+            drawableAvailable: drawableAvailable,
+            drawCallAttempted: drawCallAttempted,
+            drawCallSucceeded: drawCallSucceeded,
+            extraDiagnostics: extraDiagnostics
+        ))
     }
 
     private func log(frame: GameAppFrameResult, drawableResult: MetalDrawableRenderResult) {
