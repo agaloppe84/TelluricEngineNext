@@ -141,7 +141,8 @@ Forbidden imports:
 - `TelluricCore`, `TelluricMath`, `TelluricDeterminism`: no SwiftUI, AppKit, Metal, MetalKit, AVFoundation, GameController.
 - `TelluricWorld`, `TelluricTerrain`, `TelluricBiomes`, `TelluricSimulation`: no SwiftUI, AppKit, Metal, MetalKit.
 - `TelluricRender`: no Metal, no MetalKit.
-- `TelluricRenderMetal`: the only module allowed to import Metal/MetalKit.
+- `TelluricRenderMetal`: the only engine/backend module allowed to import Metal. It must not import MetalKit unless a backend phase explicitly requires it.
+- `TelluricGameApp`: the only app shell target allowed to import AppKit/MetalKit. It may import Metal as platform glue for MTKView device creation.
 - `TelluricAudioRuntime`: the only runtime audio backend allowed to import AVFoundation/CoreAudio APIs when introduced.
 - Tool apps may import SwiftUI/AppKit, but only inside tool targets.
 

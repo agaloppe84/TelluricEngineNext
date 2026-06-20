@@ -14,7 +14,7 @@ Engine modules own deterministic runtime, simulation, streaming, world generatio
 TelluricGame -> TelluricRuntime -> engine modules
 ```
 
-The dependency must never reverse. Engine modules must not import `TelluricGame` or `TelluricGameApp`.
+The dependency must never reverse. Engine modules must not import `TelluricGame`, `TelluricGameApp`, or `TelluricGameAppCore`.
 
 ## Game Layer vs App
 
@@ -28,7 +28,9 @@ The dependency must never reverse. Engine modules must not import `TelluricGame`
 - device input handling;
 - platform lifecycle.
 
-Future apps can translate keyboard, mouse, controller, touch, or accessibility input into `GameIntent` values. This phase only defines the engine-facing game contracts.
+Phase 16 adds `TelluricGameApp` above the game layer as a minimal macOS host. The app shell creates deterministic app-shell frames and calls `GameSession`; it does not push AppKit, MetalKit, window state, or platform input types into `TelluricGame`.
+
+Future app phases can translate keyboard, mouse, controller, touch, or accessibility input into `GameIntent` values. The current app shell does not implement platform input handling yet.
 
 Phase 15 adds `telluric-headless-loop` as a CLI client of `TelluricGame`. It creates deterministic `GameInputFrame` values directly and feeds them into `GameSession` without platform input devices, an app bundle, UI, a player controller, or gameplay systems.
 
@@ -107,16 +109,16 @@ Metal
 MetalKit
 TelluricRenderMetal
 TelluricGameApp
+TelluricGameAppCore
 AVFoundation
 CoreAudio
 GameplayKit
 ```
 
-## Not Implemented In Phase 14
+## Not Implemented In TelluricGame
 
-Phase 14 and the Phase 15 headless loop do not implement:
+`TelluricGame` does not implement:
 
-- `TelluricGameApp`;
 - app/window/view code;
 - platform input devices;
 - renderer ownership inside `TelluricGame`;
@@ -129,3 +131,5 @@ Phase 14 and the Phase 15 headless loop do not implement:
 - factions;
 - RPG stats;
 - audio, motion, or ML.
+
+Phase 16 implements `TelluricGameApp` as a thin host only. It still does not implement platform input devices, player controllers, gameplay camera, combat, inventory, quests, factions, RPG stats, renderer ownership inside `TelluricGame`, or direct backend integration inside `TelluricGame`.

@@ -7,6 +7,7 @@ import TelluricDeterminism
 import TelluricDiagnostics
 import TelluricECS
 import TelluricGame
+import TelluricGameAppCore
 import TelluricHeadlessLoopCore
 import TelluricMath
 import TelluricPersistence
@@ -31,7 +32,6 @@ final class ArchitectureImportTests: XCTestCase {
         let sources = root.appendingPathComponent("Sources")
         let forbiddenImports = [
             "SwiftUI",
-            "AppKit",
             "AVFoundation",
             "CoreAudio",
             "GameplayKit",
@@ -41,23 +41,47 @@ final class ArchitectureImportTests: XCTestCase {
             under: sources,
             containsAnyImportOf: forbiddenImports
         )
+
+        for sourceFile in try swiftFiles(under: sources) {
+            let relativePath = sourceFile.path.replacingOccurrences(of: root.path + "/", with: "")
+            let isGameAppSource = relativePath.hasPrefix("Sources/TelluricGameApp/")
+            let contents = try String(contentsOf: sourceFile, encoding: .utf8)
+
+            for sourceLine in contents.components(separatedBy: .newlines) {
+                let trimmedLine = sourceLine.trimmingCharacters(in: .whitespaces)
+                if trimmedLine == "import AppKit" {
+                    XCTAssertTrue(
+                        isGameAppSource,
+                        "Forbidden AppKit import found outside TelluricGameApp: \(sourceFile.path)"
+                    )
+                }
+            }
+        }
     }
 
-    func testMetalImportsAreIsolatedToRenderMetal() throws {
+    func testMetalImportsAreIsolatedToRenderMetalAndAppShell() throws {
         let root = try packageRoot()
         let sources = root.appendingPathComponent("Sources")
 
         for sourceFile in try swiftFiles(under: sources) {
             let relativePath = sourceFile.path.replacingOccurrences(of: root.path + "/", with: "")
             let isRenderMetalSource = relativePath.hasPrefix("Sources/TelluricRenderMetal/")
+            let isGameAppSource = relativePath.hasPrefix("Sources/TelluricGameApp/")
             let contents = try String(contentsOf: sourceFile, encoding: .utf8)
 
             for sourceLine in contents.components(separatedBy: .newlines) {
                 let trimmedLine = sourceLine.trimmingCharacters(in: .whitespaces)
-                if trimmedLine == "import Metal" || trimmedLine == "import MetalKit" {
+                if trimmedLine == "import Metal" {
                     XCTAssertTrue(
-                        isRenderMetalSource,
-                        "Forbidden Metal import found outside TelluricRenderMetal: \(sourceFile.path)"
+                        isRenderMetalSource || isGameAppSource,
+                        "Forbidden Metal import found outside TelluricRenderMetal/app shell: \(sourceFile.path)"
+                    )
+                }
+
+                if trimmedLine == "import MetalKit" {
+                    XCTAssertTrue(
+                        isGameAppSource,
+                        "Forbidden MetalKit import found outside TelluricGameApp: \(sourceFile.path)"
                     )
                 }
             }
@@ -81,6 +105,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricPersistence",
             "TelluricRenderMetal",
             "TelluricHeadlessLoopCore",
+            "TelluricGameAppCore",
         ]
         let forbiddenTokens = [
             "random(in:",
@@ -180,7 +205,7 @@ final class ArchitectureImportTests: XCTestCase {
             let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
             try assertNoSwiftSourceLine(
                 under: moduleURL,
-                containsAnyImportOf: ["TelluricGame", "TelluricGameApp"]
+                containsAnyImportOf: ["TelluricGame", "TelluricGameApp", "TelluricGameAppCore"]
             )
         }
     }

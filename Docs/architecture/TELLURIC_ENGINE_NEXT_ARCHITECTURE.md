@@ -175,7 +175,7 @@ Phase 9 implements runtime render extraction in `TelluricRenderExtraction`: resi
 
 Phase 12 introduces `TelluricRenderMetal` as the isolated Metal backend skeleton. It can attempt default device and command queue creation and accepts `RenderSnapshot`, but it does not create an app, window, `MTKView`, render loop, runtime integration, mesh generation, asset loading, shaders, or gameplay.
 
-Future `TelluricRenderMetal` phases may own RenderGraph, pipelines, GPU resources and IVDS rendering. Metal must remain isolated to this backend target.
+Future `TelluricRenderMetal` phases may own RenderGraph, pipelines, GPU resources and IVDS rendering. Metal API usage must remain isolated to this backend target for engine code, with only app-shell platform glue allowed to touch Metal/MetalKit above the engine boundary.
 
 ### Game layer
 
@@ -193,6 +193,23 @@ Responsibilities:
 - game-layer diagnostics and stable step hashes.
 
 Phase 14 implements the first game-layer contracts. It does not create an app, platform input, UI, rendering, Metal integration, player controllers, combat, inventory, quests, factions, RPG stats, audio, motion or ML.
+
+### Minimal app shell
+
+```text
+TelluricGameApp
+TelluricGameAppCore
+```
+
+Responsibilities:
+
+- SwiftPM executable host;
+- minimal macOS window and `MTKView` glue;
+- deterministic app-shell configuration;
+- stateful stepping over `TelluricGame`, `TelluricRuntime`, `TelluricRenderExtraction`, and `TelluricRenderMetal`;
+- structured diagnostics for the current no-drawable-rendering state.
+
+Phase 16 implements the first app shell. `TelluricGameAppCore` remains UI-free and testable. `TelluricGameApp` is the only target allowed to import AppKit/MetalKit. The app shell does not create an Xcode project, packaged app bundle, gameplay systems, editor UI, terrain mesh generation, asset rendering, audio, motion, or ML.
 
 ### Audio
 
@@ -255,9 +272,11 @@ TelluricAssetCookerCore
 TelluricReplayInspector
 TelluricHeadlessLoop
 TelluricHeadlessLoopCore
+TelluricGameApp
+TelluricGameAppCore
 ```
 
-These are command-line target boundaries only. Phase 4 implements the seed validator. Phase 10 implements the asset cooker as a manifest validation and descriptor/report tool. Phase 15 implements the headless loop as a vertical integration smoke executable over game, runtime, render extraction, Metal debug-line preparation, and persistence packaging. Replay inspection remains future work.
+These are top-level client target boundaries only. Phase 4 implements the seed validator. Phase 10 implements the asset cooker as a manifest validation and descriptor/report tool. Phase 15 implements the headless loop as a vertical integration smoke executable over game, runtime, render extraction, Metal debug-line preparation, and persistence packaging. Phase 16 implements the minimal app shell over the same pipeline without moving engine logic into app code. Replay inspection remains future work.
 
 ## 5. Runtime loop
 
@@ -286,6 +305,8 @@ GameInputFrame
 
 This is a validation executable, not the runtime app. It creates no window, drawable, `MTKView`, app bundle, platform input layer, or gameplay system.
 
+Phase 16 adds the minimal macOS app shell above the same pipeline. It can create a window and `MTKView`, but it still does not implement drawable presentation, platform input, gameplay systems, or terrain mesh rendering.
+
 ## 6. What changed from the first attempt
 
 Old approach:
@@ -302,7 +323,7 @@ New approach:
 
 ```text
 SwiftPM modules first
-Xcode app later
+Thin app shell later
 Engine contracts first
 Runtime app thin
 Tools are separate clients
@@ -329,8 +350,8 @@ Procedural systems testable before rendering
 13. Metal debug line pipeline
 14. Game layer contracts
 15. Headless end-to-end game loop
-16. ReplayInspector behavior
-17. Runtime app thin
+16. Minimal macOS app shell
+17. ReplayInspector behavior
 18. WorldLab
 19. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```

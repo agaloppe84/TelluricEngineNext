@@ -28,6 +28,8 @@ if [ -d Sources ]; then
     TelluricRender
     TelluricRenderExtraction
     TelluricRenderMetal
+    TelluricGameAppCore
+    TelluricGameApp
     TelluricSeedValidatorCore
     TelluricSeedValidator
     TelluricAssetCookerCore
@@ -55,7 +57,6 @@ if [ -d Sources ]; then
   done
 
   forbidden_source_targets=(
-    TelluricGameApp
     TelluricAudioTools
     TelluricMotionTools
     TelluricMLTools
@@ -69,14 +70,24 @@ if [ -d Sources ]; then
     fi
   done
 
-  if grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AppKit|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >/dev/null 2>&1; then
-    grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AppKit|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >&2
-    fail "Phase 0 sources contain forbidden platform/UI/render/audio imports"
+  if grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >/dev/null 2>&1; then
+    grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >&2
+    fail "sources contain forbidden UI/audio/game framework imports"
   fi
 
-  if grep -R -n -E "^[[:space:]]*import[[:space:]]+(Metal|MetalKit)([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricRenderMetal" >/dev/null 2>&1; then
-    grep -R -n -E "^[[:space:]]*import[[:space:]]+(Metal|MetalKit)([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricRenderMetal" >&2
-    fail "Metal imports are allowed only in Sources/TelluricRenderMetal"
+  if grep -R -n -E "^[[:space:]]*import[[:space:]]+AppKit([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricGameApp" >/dev/null 2>&1; then
+    grep -R -n -E "^[[:space:]]*import[[:space:]]+AppKit([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricGameApp" >&2
+    fail "AppKit imports are allowed only in Sources/TelluricGameApp"
+  fi
+
+  if grep -R -n -E "^[[:space:]]*import[[:space:]]+Metal([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricRenderMetal" --exclude-dir="TelluricGameApp" >/dev/null 2>&1; then
+    grep -R -n -E "^[[:space:]]*import[[:space:]]+Metal([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricRenderMetal" --exclude-dir="TelluricGameApp" >&2
+    fail "Metal imports are allowed only in Sources/TelluricRenderMetal and app-shell platform glue"
+  fi
+
+  if grep -R -n -E "^[[:space:]]*import[[:space:]]+MetalKit([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricGameApp" >/dev/null 2>&1; then
+    grep -R -n -E "^[[:space:]]*import[[:space:]]+MetalKit([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricGameApp" >&2
+    fail "MetalKit imports are allowed only in Sources/TelluricGameApp"
   fi
 
   deterministic_dirs=(
@@ -98,6 +109,7 @@ if [ -d Sources ]; then
     Sources/TelluricAssetCookerCore
     Sources/TelluricHeadlessLoopCore
     Sources/TelluricHeadlessLoop
+    Sources/TelluricGameAppCore
   )
 
   for deterministic_dir in "${deterministic_dirs[@]}"; do
@@ -131,8 +143,8 @@ if [ -d Sources ]; then
   for engine_dir in "${engine_dirs[@]}"; do
     [ -d "$engine_dir" ] || continue
 
-    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector|TelluricHeadlessLoop|TelluricHeadlessLoopCore)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
-      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector|TelluricHeadlessLoop|TelluricHeadlessLoopCore)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
+    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricGameAppCore|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector|TelluricHeadlessLoop|TelluricHeadlessLoopCore)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
+      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricGameAppCore|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector|TelluricHeadlessLoop|TelluricHeadlessLoopCore)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
       fail "$engine_dir imports app/game/tool modules"
     fi
   done
@@ -165,15 +177,20 @@ if [ -d Sources ]; then
   done
 
   if [ -d Sources/TelluricGame ]; then
-    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricRenderMetal|TelluricGameApp)([[:space:]]|$)" Sources/TelluricGame --include="*.swift" >/dev/null 2>&1; then
-      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricRenderMetal|TelluricGameApp)([[:space:]]|$)" Sources/TelluricGame --include="*.swift" >&2
+    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricRenderMetal|TelluricGameApp|TelluricGameAppCore)([[:space:]]|$)" Sources/TelluricGame --include="*.swift" >/dev/null 2>&1; then
+      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricRenderMetal|TelluricGameApp|TelluricGameAppCore)([[:space:]]|$)" Sources/TelluricGame --include="*.swift" >&2
       fail "TelluricGame must not import render backends or app targets"
     fi
   fi
 
-  if grep -R -n -E "MTKView|NSWindow|UIWindow" Sources --include="*.swift" >/dev/null 2>&1; then
-    grep -R -n -E "MTKView|NSWindow|UIWindow" Sources --include="*.swift" >&2
-    fail "current architecture phase must not create app/window/view code"
+  if grep -R -n -E "MTKView|NSWindow" Sources --include="*.swift" --exclude-dir="TelluricGameApp" >/dev/null 2>&1; then
+    grep -R -n -E "MTKView|NSWindow" Sources --include="*.swift" --exclude-dir="TelluricGameApp" >&2
+    fail "MTKView and NSWindow are allowed only in Sources/TelluricGameApp"
+  fi
+
+  if grep -R -n -E "UIWindow" Sources --include="*.swift" >/dev/null 2>&1; then
+    grep -R -n -E "UIWindow" Sources --include="*.swift" >&2
+    fail "UIWindow is not allowed in the macOS app shell"
   fi
 fi
 
@@ -188,7 +205,7 @@ if find . -path ./.git -prune -o \( -name "*.rb" -o -name Rakefile -o -name conf
   fail "Ruby/Rails files are not allowed in this repo"
 fi
 
-for forbidden_package_name in TelluricGameApp TelluricAudioTools TelluricMotionTools TelluricMLTools TelluricRPGCore TelluricWorldLab; do
+for forbidden_package_name in TelluricAudioTools TelluricMotionTools TelluricMLTools TelluricRPGCore TelluricWorldLab; do
   if [ -f Package.swift ] && grep -n "\"$forbidden_package_name\"" Package.swift >/dev/null 2>&1; then
     fail "Package.swift contains a target not allowed in the current architecture phase: $forbidden_package_name"
   fi

@@ -63,3 +63,14 @@ swift run telluric-headless-loop --seed 12345 --radius 1 --chunk-size 16 --verti
 ```
 
 The report is deterministic-friendly and contains ordered per-tick summaries, final runtime/render hashes, debug-line preparation counts, Metal availability diagnostics, and persistence package summaries.
+
+## Minimal macOS app shell
+
+The app shell is a thin SwiftPM executable host over the existing validated pipeline:
+
+```sh
+./scripts/game-app-safe.sh --dry-run
+./scripts/game-app-safe.sh
+```
+
+The dry run exercises the app-shell pipeline without opening a window. The normal run opens a minimal macOS window and `MTKView` when Metal is available, but drawable rendering is not implemented yet. Use the safe wrapper because it keeps SwiftPM scratch, cache, config, home, and module-cache paths under this repository.

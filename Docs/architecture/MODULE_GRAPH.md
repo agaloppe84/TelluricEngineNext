@@ -79,6 +79,8 @@ TelluricGame -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricDiagnos
 TelluricRender -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricAssets
 TelluricRenderExtraction -> TelluricCore, TelluricDiagnostics, TelluricMath, TelluricRender, TelluricRuntime, TelluricWorld
 TelluricRenderMetal -> TelluricCore, TelluricDiagnostics, TelluricRender
+TelluricGameAppCore -> TelluricGame, TelluricRuntime, TelluricRenderExtraction, TelluricRender, TelluricRenderMetal, engine contracts
+TelluricGameApp -> TelluricGameAppCore
 ```
 
 `TelluricRender` is backend-independent. It must not import Metal or MetalKit.
@@ -128,7 +130,7 @@ See `Docs/architecture/PERSISTENCE.md`.
 
 Phase 12 implements `TelluricRenderMetal` as the isolated Metal backend skeleton:
 
-- it is the only active target allowed to import `Metal`;
+- it is the only active engine/backend target allowed to import `Metal`;
 - it attempts system-default device and command queue creation;
 - it accepts backend-neutral `RenderSnapshot` values;
 - Phase 13 adds debug line CPU conversion and optional Metal buffer preparation;
@@ -145,6 +147,15 @@ Phase 14 implements `TelluricGame` as the first game client contract layer:
 - it does not implement an app, platform input, UI, rendering, Metal, player controllers, gameplay camera, combat, inventory, quests, factions, RPG stats, audio, motion, or ML.
 
 See `Docs/architecture/GAME_LAYER.md`.
+
+Phase 16 implements `TelluricGameApp` as the first minimal macOS app shell:
+
+- `TelluricGameAppCore` is UI-free and testable; it builds the stateful app-shell pipeline over the existing game/runtime/render-extraction/Metal-preparation modules;
+- `TelluricGameApp` is the SwiftPM executable target that owns AppKit/MetalKit window and view glue;
+- drawable rendering is not implemented yet, and prepared debug lines are reported honestly as prepared, not drawn;
+- engine modules, runtime, game, render extraction, and render contracts must not import app-shell targets.
+
+See `Docs/architecture/GAME_APP_SHELL.md`.
 
 ### Tools CLI targets
 
@@ -170,12 +181,22 @@ Phase 15 implements `telluric-headless-loop` as the app-free vertical smoke exec
 
 `TelluricReplayInspector` remains a command-line target boundary only until its tool phase.
 
+### App shell targets
+
+```text
+TelluricGameApp -> TelluricGameAppCore
+TelluricGameAppCore -> TelluricGame, TelluricRuntime, TelluricRenderExtraction, TelluricRender, TelluricRenderMetal, foundation contracts
+```
+
+`TelluricGameAppCore` is a testable app-support target, not an engine module. It must remain free of AppKit, SwiftUI, MetalKit, and window/view code.
+
+`TelluricGameApp` is the only active source target allowed to import `AppKit` and `MetalKit`. It may import `Metal` as app-shell platform glue for `MTKView` device creation. No engine module may import either app-shell target.
+
 ## 2. Deferred Targets
 
 These targets remain part of the architecture but are not created in Phase 0:
 
 ```text
-TelluricGameApp
 TelluricSurfaces
 TelluricEcology
 TelluricAudioCore
@@ -191,7 +212,7 @@ TelluricWorldLab
 ```
 
 `TelluricRenderMetal` is now active as of Phase 12. Future backend expansions must keep Metal isolated to that target.
-`TelluricGame` is now active as of Phase 14. `TelluricGameApp` remains deferred.
+`TelluricGame` is now active as of Phase 14. `TelluricGameApp` is now active as of Phase 16.
 
 ## 3. Guard Rules
 
@@ -200,8 +221,10 @@ Phase 0 architecture guards must fail if:
 - a source target outside the Phase 0 active target list is created;
 - Ruby/Rails markers or Ruby files appear;
 - scripts invoke unsafe global commands;
-- SwiftUI, AppKit, AVFoundation, CoreAudio, or GameplayKit are imported in active sources;
-- Metal or MetalKit are imported outside `Sources/TelluricRenderMetal`;
+- SwiftUI, AVFoundation, CoreAudio, or GameplayKit are imported in active sources;
+- AppKit is imported outside `Sources/TelluricGameApp`;
+- Metal is imported outside `Sources/TelluricRenderMetal` and `Sources/TelluricGameApp`;
+- MetalKit is imported outside `Sources/TelluricGameApp`;
 - deterministic/procedural modules use `random(in:)`, `UUID()`, or `Date()`;
 - engine modules import app, game, or tool modules.
 - `TelluricGame` imports render backend or app targets.
@@ -210,6 +233,7 @@ Phase 0 architecture guards must fail if:
 - engine modules import `TelluricHeadlessLoop` or `TelluricHeadlessLoopCore`.
 - low-level modules import `TelluricPersistence` outside allowed runtime/persistence boundaries.
 - render contracts, runtime, or render extraction import `TelluricRenderMetal`.
-- active sources contain app/window/view code such as `MTKView`, `NSWindow`, or `UIWindow`.
+- non-app sources contain app/window/view code such as `MTKView` or `NSWindow`;
+- active sources contain `UIWindow`.
 
 Phase 4 also runs a tiny repo-local seed validator smoke check from `scripts/check-architecture-guards.sh`.

@@ -22,10 +22,12 @@ let package = Package(
         .library(name: "TelluricRender", targets: ["TelluricRender"]),
         .library(name: "TelluricRenderExtraction", targets: ["TelluricRenderExtraction"]),
         .library(name: "TelluricRenderMetal", targets: ["TelluricRenderMetal"]),
+        .library(name: "TelluricGameAppCore", targets: ["TelluricGameAppCore"]),
         .executable(name: "telluric-seed-validator", targets: ["TelluricSeedValidator"]),
         .executable(name: "telluric-asset-cooker", targets: ["TelluricAssetCooker"]),
         .executable(name: "TelluricReplayInspector", targets: ["TelluricReplayInspector"]),
         .executable(name: "telluric-headless-loop", targets: ["TelluricHeadlessLoop"]),
+        .executable(name: "telluric-game-app", targets: ["TelluricGameApp"]),
     ],
     targets: [
         .target(name: "TelluricCore"),
@@ -74,6 +76,24 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "TelluricHeadlessLoop", dependencies: ["TelluricHeadlessLoopCore"]),
+        .target(
+            name: "TelluricGameAppCore",
+            dependencies: [
+                "TelluricCore",
+                "TelluricMath",
+                "TelluricDiagnostics",
+                "TelluricECS",
+                "TelluricSimulation",
+                "TelluricWorld",
+                "TelluricStreaming",
+                "TelluricRuntime",
+                "TelluricGame",
+                "TelluricRender",
+                "TelluricRenderExtraction",
+                "TelluricRenderMetal",
+            ]
+        ),
+        .executableTarget(name: "TelluricGameApp", dependencies: ["TelluricGameAppCore"]),
 
         .testTarget(
             name: "TelluricArchitectureTests",
@@ -98,6 +118,7 @@ let package = Package(
                 "TelluricAssetCookerCore",
                 "TelluricSeedValidatorCore",
                 "TelluricHeadlessLoopCore",
+                "TelluricGameAppCore",
             ]
         ),
     ]

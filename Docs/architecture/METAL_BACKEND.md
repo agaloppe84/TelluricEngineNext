@@ -3,7 +3,7 @@
 Phase 12 introduced `TelluricRenderMetal`, the isolated Metal backend module.
 Phase 13 adds the first backend-level debug line preparation path.
 
-This is the first backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
+This is the backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
 
 ## Backend Module vs Render Contracts
 
@@ -26,14 +26,15 @@ TelluricRenderMetal -> TelluricRender -> foundation/contracts
 
 ## Metal Isolation
 
-Only `Sources/TelluricRenderMetal` may import:
+Only `Sources/TelluricRenderMetal` may import Metal APIs inside engine/backend modules:
 
 ```text
 Metal
-MetalKit
 ```
 
-Phase 13 still uses `Metal` only. `MetalKit` is not needed because there is no app, window, drawable view, or presentation layer.
+`TelluricRenderMetal` still uses `Metal` only. `MetalKit` is not needed inside the backend because the backend does not own an app, window, drawable view, or presentation layer.
+
+Phase 16 adds `TelluricGameApp` above the engine boundary. That app-shell target may import `AppKit`, `MetalKit`, and `Metal` as platform glue for a minimal `MTKView`. This exception does not allow Metal or MetalKit imports in engine modules.
 
 The following modules must not import Metal APIs:
 
@@ -50,6 +51,8 @@ The following modules must not import Metal APIs:
 - `TelluricRenderExtraction`;
 - `TelluricAssets`;
 - `TelluricPersistence`.
+- `TelluricGame`;
+- `TelluricGameAppCore`.
 
 ## Current Backend Capabilities
 
@@ -87,6 +90,8 @@ When Metal is unavailable, CPU conversion still works and buffer creation report
 
 Phase 15 adds `telluric-headless-loop` as a top-level CLI client of this backend. The tool passes extracted `RenderSnapshot` values into `MetalRenderBackend` and records prepared debug line counts. In GPU-less or sandboxed environments, Metal unavailable and debug-line buffer unavailable diagnostics are treated as non-fatal warnings by the tool so the game/runtime/render-extraction chain can still be validated.
 
+Phase 16 adds `telluric-game-app` as a top-level macOS host. It can create an `MTKView` when a Metal device exists, then calls the same backend preparation path. It still does not provide drawable rendering to the backend.
+
 ## Explicitly Unsupported
 
 The backend still reports unsupported diagnostics for:
@@ -101,7 +106,7 @@ Phase 13 no longer reports debug lines as simply unsupported when they can be pr
 
 Unsupported content is an error in the frame result. This prevents the backend from silently pretending to render data it cannot draw yet.
 
-## No App, Window, Or MTKView
+## Backend Has No App, Window, Or MTKView
 
 `TelluricRenderMetal` does not create:
 
@@ -112,9 +117,9 @@ Unsupported content is an error in the frame result. This prevents the backend f
 - a render loop tied to display refresh;
 - a platform event lifecycle.
 
-Future apps or tools may provide drawables and presentation policy above this backend boundary.
+Apps or tools may provide drawables and presentation policy above this backend boundary. Phase 16 creates only the first app-shell host; it does not add backend drawable presentation yet.
 
-The headless loop does not provide a drawable. It exercises backend acceptance and debug line preparation only.
+The headless loop does not provide a drawable. The app shell creates a view host but still exercises backend acceptance and debug line preparation only.
 
 ## Future Draw Pipeline
 
@@ -155,4 +160,4 @@ Phase 13 does not implement:
 - editor UI;
 - audio, motion, or ML.
 
-Phase 15 still does not implement visible drawing, drawable presentation, app/window/view code, terrain mesh generation, runtime render-loop integration, or gameplay rendering.
+Phase 16 still does not implement visible debug line drawing, drawable presentation through `TelluricRenderMetal`, terrain mesh generation, runtime-owned render-loop integration, or gameplay rendering.

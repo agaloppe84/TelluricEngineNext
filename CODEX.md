@@ -44,6 +44,7 @@ Use:
 ./scripts/swift-build-safe.sh
 ./scripts/swift-test-safe.sh
 ./scripts/check-architecture-guards.sh
+./scripts/game-app-safe.sh --dry-run
 ```
 
 Do not use direct global setup commands.
