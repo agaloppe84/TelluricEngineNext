@@ -31,6 +31,7 @@ enum TelluricGameAppMain {
 
             let pipeline = try GameAppPipeline(
                 config: arguments.config,
+                debugCameraConfig: arguments.debugCameraConfig,
                 debugVisualOptions: arguments.debugVisualOptions
             )
             let delegate = GameAppDelegate(arguments: arguments, pipeline: pipeline)
@@ -222,13 +223,18 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
              .toggleChunkCenters,
              .toggleCentralChunkHighlight,
              .toggleStreamingRadiusBounds,
-             .toggleTerrainHeightWireframe:
+             .toggleTerrainHeightWireframe,
+             .increaseHeightExaggeration,
+             .decreaseHeightExaggeration,
+             .resetHeightExaggeration:
             print(
                 "telluric-game-app debug layers: "
                     + pipeline.debugVisualLayers.enabledLayerNames.joined(separator: ",")
+                    + ", height exaggeration \(pipeline.debugVisualLayers.terrainHeightScale)"
+                    + ", oblique strength \(pipeline.debugVisualLayers.terrainObliqueStrength)"
             )
 
-        case .zoomIn, .zoomOut, .pan(_, _), .reset:
+        case .zoomIn, .zoomOut, .pan(_, _), .reset, .cycleProjectionMode:
             if verboseFrameLogging && !quiet {
                 let camera = pipeline.debugCamera
                 print(
@@ -271,6 +277,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                 + "terrain debug lines \(finalFrame.terrainDebugLinesExtracted), "
                 + "drawn debug lines \(finalFrame.drawnDebugLines), "
                 + "drawable success \(finalFrame.drawCallSucceeded), "
+                + "projection \(finalFrame.debugProjectionMode.rawValue), "
+                + "height exaggeration \(finalFrame.terrainHeightExaggeration), "
                 + "layers \(finalFrame.debugVisualLayersEnabled.joined(separator: ",")), "
                 + "diagnostics info \(summary.infos) "
                 + "warning \(summary.warnings) "
@@ -300,6 +308,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                     + "frames simulated \(frameSummaries.count), "
                     + "debug lines \(finalFrame.debugLinesExtracted), "
                     + "terrain debug lines \(finalFrame.terrainDebugLinesExtracted), "
+                    + "projection \(finalFrame.debugProjectionMode.rawValue), "
+                    + "height exaggeration \(finalFrame.terrainHeightExaggeration), "
                     + "camera center \(finalFrame.debugCameraCenterX),\(finalFrame.debugCameraCenterZ), "
                     + "halfZ \(finalFrame.debugCameraHalfExtentZ), "
                     + "diagnostics info \(finalFrame.diagnosticsSummary.infos) "
@@ -386,6 +396,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                 + "render \(frame.renderSnapshotHash), "
                 + "prepared debug lines \(frame.preparedDebugLineCount), "
                 + "terrain debug lines \(frame.terrainDebugLineCount), "
+                + "projection \(frame.debugCameraState.projectionMode.rawValue), "
+                + "height exaggeration \(frame.debugVisualOptions.terrainHeightScale), "
                 + "drawn debug lines \(drawableResult.drawnDebugLineCount), "
                 + "presented \(drawableResult.presentedDrawable), "
                 + "drawable success \(drawableResult.success), "
@@ -469,6 +481,14 @@ private final class GameAppMetalView: MTKView {
             return .toggleStreamingRadiusBounds
         case "t":
             return .toggleTerrainHeightWireframe
+        case "p":
+            return .cycleProjectionMode
+        case "[":
+            return .decreaseHeightExaggeration
+        case "]":
+            return .increaseHeightExaggeration
+        case "\\":
+            return .resetHeightExaggeration
         case "a":
             return .pan(deltaX: -1, deltaZ: 0)
         case "d":

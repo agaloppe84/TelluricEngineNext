@@ -80,7 +80,7 @@ The terrain preview:
 
 This is not terrain mesh rendering. It does not create triangles, normals, materials, textures, GPU terrain buffers, collision, physics, lighting, biome materials, or asset loading.
 
-For a radius 1 / chunk size 16 app-shell run with stride 4, terrain preview adds 360 terrain wireframe lines. With the polished 48-line grid enabled, the expected default app-shell line count is 408 debug lines.
+For a radius 1 / chunk size 16 app-shell run with stride 4, terrain preview adds 360 terrain wireframe lines. With the polished 48-line grid enabled, the expected default app-shell line count is 408 debug lines. Phase 23 leaves this line count unchanged while making the app-shell default projection oblique and increasing the default height exaggeration to 2.0 for readability.
 
 Negative chunk coordinates use the same integer chunk coordinate assumptions as streaming and world contracts. Extreme coordinates that overflow integer footprint calculation are reported as diagnostics.
 
@@ -92,7 +92,7 @@ The extraction path must not depend on dictionary or set iteration order, system
 
 Layer toggles alter the ordered debug primitive set and therefore intentionally alter the render snapshot hash. This is useful for deterministic visual debugging and report comparison.
 
-Terrain-preview toggles and stride/height-scale options also alter the ordered debug line set and render snapshot hash by design.
+Terrain-preview toggles and stride/height-exaggeration options also alter the ordered debug line set and render snapshot hash by design. Projection-mode and oblique-strength controls alter Metal debug-line uniforms in the app shell; they do not alter extraction output unless height exaggeration changes the line Y values.
 
 ## Camera Boundary
 
@@ -117,7 +117,7 @@ AppKit
 TelluricRenderMetal
 ```
 
-`TelluricRenderMetal` can consume the extracted `RenderSnapshot` as a backend client. Phase 13 can prepare extracted debug chunk boundary lines into CPU-side Metal vertices and, when a device exists, a Metal vertex buffer. Phase 17 can draw those debug lines into a caller-provided drawable through a debug-only top-down projection.
+`TelluricRenderMetal` can consume the extracted `RenderSnapshot` as a backend client. Phase 13 can prepare extracted debug chunk boundary lines into CPU-side Metal vertices and, when a device exists, a Metal vertex buffer. Phase 17 can draw those debug lines into a caller-provided drawable through a debug-only projection. Phase 23 lets the app shell choose top-down or oblique-height projection without making extraction import Metal.
 
 Extraction still does not allocate GPU resources, compile shaders, encode command buffers, create windows, or run a render loop. The bridge only produces backend-neutral render contracts.
 

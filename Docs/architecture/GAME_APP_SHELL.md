@@ -6,6 +6,7 @@ Phase 18 hardens the local app run and visual smoke workflow.
 Phase 20 adds debug-only camera and projection controls for viewing the chunk grid.
 Phase 21 adds debug visual polish layers and quieter app-run logging.
 Phase 22 adds deterministic terrain height debug preview using backend-neutral debug lines.
+Phase 23 improves terrain debug projection readability with top-down/oblique modes, height exaggeration, and oblique strength controls.
 
 This is a SwiftPM executable host, not a traditional Xcode project or packaged app bundle. It exists to prove that the existing engine/game/runtime/render-extraction/Metal-preparation pipeline can be hosted visually without moving engine behavior into UI code.
 
@@ -82,11 +83,11 @@ Default colors are deterministic backend-neutral `RenderColor` values:
 - central chunk: green accent;
 - streaming bounds: purple accent;
 - optional chunk centers: pale blue.
-- terrain wireframe: cyan/teal.
+- terrain wireframe: bright cyan/teal.
 
 For a radius 1 / chunk size 16 run without terrain preview, the polished line set is 48 total debug lines. With the default app-shell terrain preview enabled at stride 4, the app extracts 408 total debug lines: 48 polished grid lines plus 360 terrain wireframe lines.
 
-The terrain preview samples each resident chunk's deterministic heightfield, connects samples in X/Z directions, stores height in the debug line Y coordinate, and uses a small debug projection height shear so relief is visible. It remains a debug wireframe, not production terrain rendering.
+The terrain preview samples each resident chunk's deterministic heightfield, connects samples in X/Z directions, stores height in the debug line Y coordinate, and uses oblique debug projection when enabled so relief is visible. The default app-shell height exaggeration is 2.0 and the default oblique strength is 1.0. It remains a debug wireframe, not production terrain rendering.
 
 ## Debug Camera
 
@@ -105,6 +106,13 @@ The default camera fits the generated chunk grid with a small margin. For the co
 
 Invalid camera or viewport values are clamped or reset by `TelluricGameAppCore` and reported as diagnostics. The app diagnostics report includes the final camera center, half extent, projection extents, viewport size, projection mode, debug line counts, and draw success.
 
+Phase 23 supports two debug projection modes:
+
+- `top-down`: pure X/Z projection, useful for checking chunk layout;
+- `oblique`: default terrain preview projection, using deterministic Y shear so height differences are easier to read.
+
+These are debug visualization modes only. They are not gameplay cameras, terrain cameras, editor cameras, or a general input system.
+
 ## Controls
 
 `TelluricGameApp` owns the AppKit event glue. `TelluricGameAppCore` receives only platform-neutral `DebugCameraControlIntent` values.
@@ -116,6 +124,10 @@ Current controls:
 - arrow keys: pan;
 - `W`, `A`, `S`, `D`: pan;
 - `0` or `R`: reset/focus the debug grid;
+- `P`: cycle top-down / oblique debug projection;
+- `[`: decrease terrain height exaggeration;
+- `]`: increase terrain height exaggeration;
+- `\`: reset terrain height exaggeration;
 - `G`: toggle chunk boundaries;
 - `X`: toggle world axes;
 - `O`: toggle origin marker;
@@ -145,6 +157,7 @@ To open the minimal window from a local macOS shell:
 ./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_camera_report.json
 ./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_visual_polish_report.json
 ./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --show-terrain --terrain-stride 4 --terrain-height-scale 1.0 --diagnostics-report Tools/benchmarks/game_app_terrain_debug_report.json
+./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --projection oblique --height-exaggeration 2.0 --diagnostics-report Tools/benchmarks/game_app_projection_report.json
 ```
 
 The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under `.build/`. Raw `swift run` can use user-level SwiftPM cache and configuration paths, so wrappers are preferred for Codex and validation work.
@@ -169,7 +182,8 @@ The report contains:
 - enabled debug visual layers;
 - attempted and successful draw call counts;
 - final debug camera center and half extent;
-- final debug projection extents, mode, and viewport size;
+- final debug projection extents, mode, height shears, and viewport size;
+- terrain height exaggeration and oblique strength;
 - first warning or error, when present;
 - ordered frame summaries;
 - ordered diagnostics and severity counts;
@@ -198,3 +212,5 @@ Phase 20 adds debug camera controls only. It still does not implement a gameplay
 Phase 21 adds debug visual polish only. It still does not implement terrain meshes, material or texture rendering, GPU text labels, editor UI, gameplay controls, or asset rendering.
 
 Phase 22 adds terrain height debug preview only. It still does not implement final terrain mesh rendering, triangle rendering, normals, lighting, shadows, material or texture rendering, biome material rendering, asset loading, editor UI, gameplay controls, physics, audio, motion, or ML.
+
+Phase 23 adds terrain debug projection readability only. It still does not implement final terrain mesh rendering, triangle rendering, normals, lighting, shadows, material or texture rendering, biome material rendering, asset loading, editor UI, gameplay cameras, player controls, physics, audio, motion, or ML.

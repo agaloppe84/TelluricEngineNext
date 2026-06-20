@@ -355,7 +355,7 @@ public struct RenderColor: Codable, Equatable, Hashable, Sendable, StableHashabl
     public static let debugStreamingRadius = RenderColor(red: 0.74, green: 0.48, blue: 1.0, alpha: 1)
 
     /// Cyan terrain height wireframe color for debug-only heightfield previews.
-    public static let debugTerrainWireframe = RenderColor(red: 0.10, green: 0.86, blue: 0.78, alpha: 0.92)
+    public static let debugTerrainWireframe = RenderColor(red: 0.04, green: 0.96, blue: 0.88, alpha: 1.0)
 
     public func stableHash(into hasher: inout StableHasher) {
         hasher.combine(red)

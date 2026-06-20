@@ -158,6 +158,7 @@ Phase 16 implements `TelluricGameApp` as the first minimal macOS app shell:
 - Phase 20 adds debug-only camera/projection contracts in `TelluricGameAppCore` and AppKit-only keyboard/mouse event glue in `TelluricGameApp`;
 - Phase 21 adds backend-neutral debug visual layer options, fixed debug colors, app-shell toggles, and quieter frame logging;
 - Phase 22 enables debug-only terrain height wireframe preview through backend-neutral `DebugLine` extraction and app-shell terrain toggles;
+- Phase 23 adds app-shell projection mode, height exaggeration, and oblique-strength controls for terrain debug readability without changing engine/runtime/render backend dependency direction;
 - engine modules, runtime, game, render extraction, and render contracts must not import app-shell targets.
 
 See `Docs/architecture/GAME_APP_SHELL.md`.

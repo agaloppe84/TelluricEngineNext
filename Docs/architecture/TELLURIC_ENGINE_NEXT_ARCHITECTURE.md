@@ -218,6 +218,8 @@ Phase 21 adds debug visual polish. `TelluricRenderExtraction` emits line-based a
 
 Phase 22 adds terrain height debug preview. `TelluricRenderExtraction` can regenerate deterministic terrain payloads for resident chunks and emit sparse height wireframes as backend-neutral `DebugLine` values. `TelluricRenderMetal` still draws only debug lines; no terrain mesh, material, texture, asset, gameplay, or editor system is introduced.
 
+Phase 23 improves terrain debug projection readability. `TelluricGameAppCore` owns projection mode selection, height exaggeration, and oblique strength as UI-free debug controls. `TelluricRenderMetal` still receives only debug-line projection uniforms and draws line primitives; no terrain mesh, material, texture, lighting, gameplay camera, or editor system is introduced.
+
 ### Audio
 
 ```text
@@ -312,7 +314,7 @@ GameInputFrame
 
 This is a validation executable, not the runtime app. It creates no window, drawable, `MTKView`, app bundle, platform input layer, or gameplay system.
 
-Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. Phase 18 hardens the local safe run, bounded smoke, and diagnostics-report workflow so the user can visually verify the debug chunk grid on a Mac. Phase 20 adds debug-only camera/projection controls so the grid is centered, scaled, zoomable, pannable, and resettable without creating gameplay input. Phase 21 adds line-based visual polish layers and quieter logging. The app still does not implement player controls, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
+Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. Phase 18 hardens the local safe run, bounded smoke, and diagnostics-report workflow so the user can visually verify the debug chunk grid on a Mac. Phase 20 adds debug-only camera/projection controls so the grid is centered, scaled, zoomable, pannable, and resettable without creating gameplay input. Phase 21 adds line-based visual polish layers and quieter logging. Phase 22 adds terrain height wireframe preview. Phase 23 makes that preview easier to read through top-down/oblique projection modes, height exaggeration, and oblique strength controls. The app still does not implement player controls, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
 
 ## 6. What changed from the first attempt
 
@@ -364,8 +366,9 @@ Procedural systems testable before rendering
 20. Debug camera / projection controls
 21. Debug visual polish
 22. Terrain height debug preview using backend-neutral debug lines
-23. WorldLab
-24. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+23. Terrain debug projection / 3D readability polish
+24. WorldLab
+25. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

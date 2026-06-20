@@ -57,7 +57,7 @@ Phase 20 adds debug camera/projection control in the app-shell layer. `TelluricR
 
 Phase 21 adds fixed debug visualization colors in `RenderColor` for chunk boundaries, axes, origin marker, central chunk highlight, streaming bounds, and optional chunk centers. These are backend-neutral color constants, not materials or assets.
 
-Phase 22 adds `RenderColor.debugTerrainWireframe` for line-based terrain height debug preview. This is still a debug primitive color, not a material or asset reference.
+Phase 22 adds `RenderColor.debugTerrainWireframe` for line-based terrain height debug preview. Phase 23 brightens that fixed cyan/teal debug color for readability. This is still a debug primitive color, not a material or asset reference.
 
 Future Metal backend phases may translate resource identifiers into backend resources and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
 
@@ -89,7 +89,7 @@ It stores:
 
 It does not store input bindings, player state, camera controllers, platform view state, or app lifecycle data.
 
-The app-shell debug camera introduced in Phase 20 is separate from `CameraSnapshot`. It is a UI-free helper in `TelluricGameAppCore` that derives `MetalDebugLineProjection` values for the current debug grid. It does not change renderer-independent camera contracts and is not a player or terrain camera.
+The app-shell debug camera introduced in Phase 20 is separate from `CameraSnapshot`. It is a UI-free helper in `TelluricGameAppCore` that derives `MetalDebugLineProjection` values for the current debug grid. Phase 23 adds explicit top-down and oblique-height debug projection modes plus height exaggeration controls. These do not change renderer-independent camera contracts and are not a player or terrain camera.
 
 ## Debug Primitives
 
@@ -131,9 +131,9 @@ The backend skeleton currently supports:
 - deterministic frame results;
 - explicit unsupported diagnostics for renderable instances, texture/material binding, debug points, and debug labels.
 
-Debug line drawing is still a debug visualization path only. It uses a backend-owned debug projection for chunk footprint and terrain preview lines. The app can enable a small height shear so terrain Y values are visible, but there is still no terrain mesh rendering, material system, texture loading, asset rendering, gameplay camera, or render graph.
+Debug line drawing is still a debug visualization path only. It uses a backend-owned debug projection for chunk footprint and terrain preview lines. The app can choose top-down mode, which ignores height in projection, or oblique-height mode, which applies deterministic Y shear so terrain relief is visible. Height exaggeration changes the debug line Y values generated from the existing heightfield samples, but there is still no terrain mesh rendering, material system, texture loading, asset rendering, gameplay camera, lighting, or render graph.
 
-Phase 20 makes that top-down projection controllable from the app shell: the default view fits the generated chunk grid, viewport aspect is accounted for, zoom and pan adjust only debug visualization state, and reset refocuses the grid.
+Phase 20 makes that projection controllable from the app shell: the default view fits the generated chunk grid, viewport aspect is accounted for, zoom and pan adjust only debug visualization state, and reset refocuses the grid. Phase 23 defaults the app shell to oblique-height projection for terrain preview readability while preserving `--projection top-down`.
 
 Phase 21 makes the default debug grid easier to read, but it does not add terrain rendering, mesh generation, GPU text labels, material systems, or asset rendering.
 

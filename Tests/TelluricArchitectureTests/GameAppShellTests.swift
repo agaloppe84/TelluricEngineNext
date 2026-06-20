@@ -67,6 +67,9 @@ final class GameAppShellTests: XCTestCase {
             "--hide-terrain",
             "--terrain-stride", "8",
             "--terrain-height-scale", "0.5",
+            "--projection", "top-down",
+            "--height-exaggeration", "2.5",
+            "--oblique-strength", "1.5",
         ])
 
         XCTAssertFalse(arguments.dryRun)
@@ -84,7 +87,9 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertFalse(arguments.debugVisualOptions.showCentralChunkHighlight)
         XCTAssertFalse(arguments.debugVisualOptions.showTerrainHeightWireframe)
         XCTAssertEqual(arguments.debugVisualOptions.terrainWireframeStride, 8)
-        XCTAssertEqual(arguments.debugVisualOptions.terrainHeightScale, 0.5)
+        XCTAssertEqual(arguments.debugVisualOptions.terrainHeightScale, 2.5)
+        XCTAssertEqual(arguments.debugVisualOptions.terrainObliqueStrength, 1.5)
+        XCTAssertEqual(arguments.debugCameraConfig.projectionMode, .topDownOrthographic)
     }
 
     func testArgumentParserRejectsInvalidFrames() {
@@ -119,16 +124,47 @@ final class GameAppShellTests: XCTestCase {
                 .invalidValue(option: "--terrain-height-scale", value: "0", reason: "Expected a finite positive number.")
             )
         }
+
+        XCTAssertThrowsError(try GameAppArgumentParser.parse(["--height-exaggeration", "nan"])) { error in
+            XCTAssertEqual(
+                error as? GameAppArgumentError,
+                .invalidValue(option: "--height-exaggeration", value: "nan", reason: "Expected a finite positive number.")
+            )
+        }
+
+        XCTAssertThrowsError(try GameAppArgumentParser.parse(["--oblique-strength", "5"])) { error in
+            XCTAssertEqual(
+                error as? GameAppArgumentError,
+                .invalidValue(option: "--oblique-strength", value: "5", reason: "Expected a finite number from 0 through 4.0.")
+            )
+        }
+
+        XCTAssertThrowsError(try GameAppArgumentParser.parse(["--projection", "sideways"])) { error in
+            XCTAssertEqual(
+                error as? GameAppArgumentError,
+                .invalidValue(option: "--projection", value: "sideways", reason: "Expected top-down or oblique.")
+            )
+        }
+    }
+
+    func testProjectionModeCodableParsingAndCycling() throws {
+        XCTAssertEqual(DebugProjectionMode.parse("top-down"), .topDownOrthographic)
+        XCTAssertEqual(DebugProjectionMode.parse("oblique"), .obliqueHeight)
+        XCTAssertEqual(DebugProjectionMode.topDownOrthographic.cliName, "top-down")
+        XCTAssertEqual(DebugProjectionMode.obliqueHeight.cliName, "oblique")
+        XCTAssertEqual(DebugProjectionMode.topDownOrthographic.next, .obliqueHeight)
+        XCTAssertEqual(DebugProjectionMode.obliqueHeight.next, .topDownOrthographic)
+        XCTAssertEqual(try roundTrip(DebugProjectionMode.obliqueHeight), .obliqueHeight)
     }
 
     func testDebugCameraConfigCodableRoundTrip() throws {
         let config = DebugCameraConfig(
-            projectionMode: .topDownOrthographic,
+            projectionMode: .obliqueHeight,
             minimumHalfExtent: 2,
             maximumHalfExtent: 512,
             zoomStepFactor: 1.5,
             panStepFraction: 0.25,
-            fitMargin: 1.2
+            fitMargin: 1.35
         )
 
         let data = try JSONEncoder().encode(config)
@@ -148,9 +184,10 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertTrue(options.showStreamingRadiusBounds)
         XCTAssertTrue(options.showTerrainHeightWireframe)
         XCTAssertEqual(options.terrainWireframeStride, 4)
-        XCTAssertEqual(options.terrainHeightScale, 1)
-        XCTAssertEqual(options.terrainHeightProjectionShearX, 0.12)
-        XCTAssertEqual(options.terrainHeightProjectionShearZ, 0.35)
+        XCTAssertEqual(options.terrainHeightScale, 2)
+        XCTAssertEqual(options.terrainObliqueStrength, 1)
+        XCTAssertEqual(options.terrainHeightProjectionShearX, 0.22)
+        XCTAssertEqual(options.terrainHeightProjectionShearZ, 0.45)
         XCTAssertEqual(options.enabledLayerNames, [
             "chunkBoundaries",
             "worldAxes",
@@ -172,9 +209,10 @@ final class GameAppShellTests: XCTestCase {
         )
 
         XCTAssertTrue(projection.success)
+        XCTAssertEqual(projection.state.projectionMode, .obliqueHeight)
         XCTAssertEqual(projection.state.centerX, 8, accuracy: 0.0001)
         XCTAssertEqual(projection.state.centerZ, 8, accuracy: 0.0001)
-        XCTAssertEqual(projection.projection.halfExtentZ, 27.6, accuracy: 0.0001)
+        XCTAssertEqual(projection.projection.halfExtentZ, 32.4, accuracy: 0.0001)
 
         let minXClip = (-16 - projection.projection.centerX) / projection.projection.halfExtentX
         let maxXClip = (32 - projection.projection.centerX) / projection.projection.halfExtentX
@@ -203,6 +241,11 @@ final class GameAppShellTests: XCTestCase {
 
         let reset = panned.applying(.reset, appConfig: config, viewportAspect: 16.0 / 9.0).state
         XCTAssertEqual(reset, camera)
+
+        let cycled = camera.applying(.cycleProjectionMode, appConfig: config, viewportAspect: 16.0 / 9.0).state
+        XCTAssertEqual(cycled.projectionMode, .topDownOrthographic)
+        XCTAssertEqual(cycled.centerX, camera.centerX)
+        XCTAssertEqual(cycled.halfExtentZ, camera.halfExtentZ)
     }
 
     func testInvalidDebugCameraExtentIsClampedWithDiagnostics() {
@@ -265,8 +308,9 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(frame.drawableDescriptor.viewportHeight, 720)
         XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentX, 0)
         XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentZ, 0)
-        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearX, 0.12)
-        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearZ, 0.35)
+        XCTAssertEqual(frame.frameResult.debugCameraState.projectionMode, .obliqueHeight)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearX, 0.22)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearZ, 0.45)
         XCTAssertEqual(frame.frameResult.debugCameraState.centerX, 8, accuracy: 0.0001)
         XCTAssertEqual(frame.frameResult.debugCameraState.centerZ, 8, accuracy: 0.0001)
     }
@@ -290,6 +334,62 @@ final class GameAppShellTests: XCTestCase {
         )
     }
 
+    func testTopDownProjectionKeepsTerrainHeightOutOfProjectionUniforms() throws {
+        var pipeline = try GameAppPipeline(
+            config: GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8),
+            debugCameraConfig: DebugCameraConfig(projectionMode: .topDownOrthographic)
+        )
+
+        let frame = pipeline.stepForRendering()
+
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 408)
+        XCTAssertEqual(frame.frameResult.terrainDebugLineCount, 360)
+        XCTAssertEqual(frame.frameResult.debugCameraState.projectionMode, .topDownOrthographic)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearX, 0)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearZ, 0)
+    }
+
+    func testHeightExaggerationChangesTerrainRenderSnapshotDeterministically() throws {
+        let config = GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8)
+        var base = try GameAppPipeline(
+            config: config,
+            debugVisualOptions: DebugVisualOptions(terrainHeightScale: 1)
+        )
+        var exaggerated = try GameAppPipeline(
+            config: config,
+            debugVisualOptions: DebugVisualOptions(terrainHeightScale: 3)
+        )
+
+        let baseFrame = base.stepForRendering()
+        let exaggeratedFrame = exaggerated.stepForRendering()
+
+        XCTAssertEqual(baseFrame.frameResult.preparedDebugLineCount, 408)
+        XCTAssertEqual(exaggeratedFrame.frameResult.preparedDebugLineCount, 408)
+        XCTAssertNotEqual(baseFrame.frameResult.renderSnapshotHash, exaggeratedFrame.frameResult.renderSnapshotHash)
+        XCTAssertEqual(exaggeratedFrame.frameResult.debugVisualOptions.terrainHeightScale, 3)
+    }
+
+    func testRadiusOneTerrainStaysWithinDefaultObliqueProjectionBounds() throws {
+        var pipeline = try GameAppPipeline(config: GameAppConfig(
+            seed: 1,
+            radius: 1,
+            chunkSize: 16,
+            verticalScale: 8
+        ))
+
+        let frame = pipeline.stepForRendering(viewportWidth: 1600, viewportHeight: 900)
+        let projection = frame.drawableDescriptor.debugLineProjection
+        let points = frame.renderSnapshot.debugLines.flatMap { [$0.start, $0.end] }
+
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 408)
+        XCTAssertEqual(frame.frameResult.terrainDebugLineCount, 360)
+        XCTAssertTrue(points.allSatisfy { point in
+            let clipX = ((point.x - projection.centerX) + point.y * projection.heightShearX) / projection.halfExtentX
+            let clipY = ((point.z - projection.centerZ) + point.y * projection.heightShearZ) / projection.halfExtentZ
+            return abs(clipX) <= 1.0 && abs(clipY) <= 1.0
+        })
+    }
+
     func testAppShellControlIntentsDoNotMutateRuntimeStateDirectly() throws {
         var pipeline = try GameAppPipeline(config: GameAppConfig(
             seed: 1,
@@ -305,6 +405,24 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertFalse(diagnostics.hasErrors)
         XCTAssertEqual(beforeHash, afterHash)
         XCTAssertLessThan(pipeline.debugCamera.halfExtentZ, DebugCameraState.focused(appConfig: pipeline.config).halfExtentZ)
+    }
+
+    func testProjectionAndHeightControlsDoNotMutateRuntimeStateDirectly() throws {
+        var pipeline = try GameAppPipeline(config: GameAppConfig(
+            seed: 1,
+            radius: 1,
+            chunkSize: 16,
+            verticalScale: 8
+        ))
+        let beforeHash = pipeline.snapshot().stableHash
+
+        XCTAssertFalse(pipeline.applyDebugCameraControl(.cycleProjectionMode).hasErrors)
+        XCTAssertFalse(pipeline.applyDebugCameraControl(.increaseHeightExaggeration).hasErrors)
+        let afterHash = pipeline.snapshot().stableHash
+
+        XCTAssertEqual(beforeHash, afterHash)
+        XCTAssertEqual(pipeline.debugCamera.projectionMode, .topDownOrthographic)
+        XCTAssertGreaterThan(pipeline.debugVisualLayers.terrainHeightScale, DebugVisualOptions.default.terrainHeightScale)
     }
 
     func testAppShellVisualTogglesDoNotMutateRuntimeStateDirectly() throws {
@@ -423,10 +541,14 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(decoded.drawnDebugLineVertices, 0)
         XCTAssertEqual(decoded.debugVisualOptions, .default)
         XCTAssertEqual(decoded.debugVisualLayersEnabled, DebugVisualOptions.default.enabledLayerNames)
-        XCTAssertEqual(decoded.debugProjectionMode, .topDownOrthographic)
+        XCTAssertEqual(decoded.debugProjectionMode, .obliqueHeight)
+        XCTAssertEqual(decoded.terrainHeightExaggeration, 2)
+        XCTAssertEqual(decoded.terrainObliqueStrength, 1)
         XCTAssertEqual(decoded.debugCameraCenterX, 8)
         XCTAssertEqual(decoded.debugCameraCenterZ, 8)
         XCTAssertNotNil(decoded.debugCameraHalfExtentZ)
+        XCTAssertEqual(decoded.debugProjectionHeightShearX, 0.22)
+        XCTAssertEqual(decoded.debugProjectionHeightShearZ, 0.45)
         XCTAssertEqual(decoded.debugViewportWidth, 1280)
         XCTAssertEqual(decoded.debugViewportHeight, 720)
         XCTAssertEqual(decoded.drawCallsAttempted, 0)

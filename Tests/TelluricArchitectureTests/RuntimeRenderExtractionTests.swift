@@ -251,7 +251,7 @@ final class RuntimeRenderExtractionTests: XCTestCase {
         XCTAssertEqual(RenderColor.debugOrigin, RenderColor(red: 1.0, green: 0.92, blue: 0.20, alpha: 1))
         XCTAssertEqual(RenderColor.debugCentralChunk, RenderColor(red: 0.30, green: 1.0, blue: 0.44, alpha: 1))
         XCTAssertEqual(RenderColor.debugStreamingRadius, RenderColor(red: 0.74, green: 0.48, blue: 1.0, alpha: 1))
-        XCTAssertEqual(RenderColor.debugTerrainWireframe, RenderColor(red: 0.10, green: 0.86, blue: 0.78, alpha: 0.92))
+        XCTAssertEqual(RenderColor.debugTerrainWireframe, RenderColor(red: 0.04, green: 0.96, blue: 0.88, alpha: 1.0))
     }
 
     func testSameRuntimeSnapshotProducesSameRenderSnapshotHash() {

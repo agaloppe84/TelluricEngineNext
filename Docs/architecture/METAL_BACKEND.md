@@ -7,6 +7,7 @@ Phase 18 hardens app-shell visual smoke reporting around that drawable path.
 Phase 20 feeds the drawable pass with app-shell debug camera projection controls.
 Phase 21 improves the debug line set and colors without changing the backend boundary.
 Phase 22 lets those debug lines include terrain height wireframes and a debug-only height shear projection.
+Phase 23 makes that projection explicitly switchable between top-down and oblique-height modes from the app shell.
 
 This is the backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
 
@@ -93,7 +94,7 @@ The pipeline is:
 5. pack the vertices into an internal Metal-side layout;
 6. create an `MTLBuffer` when a `MetalDeviceContext` is available;
 7. build a minimal Metal render pipeline state;
-8. map line world coordinates through a debug-only projection; height shear is zero for top-down grids and non-zero for terrain preview;
+8. map line world coordinates through a debug-only projection; height shear is zero for top-down mode and non-zero for oblique-height terrain preview;
 9. encode `.line` primitives into the caller's render pass descriptor;
 10. present the caller's drawable.
 
@@ -112,14 +113,14 @@ The drawable pass draws only `DebugLine` primitives from `RenderSnapshot`.
 It uses:
 
 - `MetalDrawableFrameDescriptor` for frame index, viewport, clear color, pixel format, and debug projection;
-- `MetalDebugLineProjection` for a debug-only mapping from world `x/z` to clip space, with optional Y height shear for terrain preview;
+- `MetalDebugLineProjection` for a debug-only mapping from world `x/z` to clip space, with optional Y height shear for oblique terrain preview;
 - embedded minimal Metal shader source;
 - the existing prepared debug line vertex buffer;
 - caller-owned drawable and render pass descriptor.
 
-The pass clears the drawable and draws line primitives. It does not interpret `CameraSnapshot` yet; the projection is explicitly debug-only so chunk grids and terrain height wireframes are visible before terrain/camera rendering exists.
+The pass clears the drawable and draws line primitives. It does not interpret `CameraSnapshot` yet; the projection is explicitly debug-only so chunk grids and terrain height wireframes are visible before terrain/camera rendering exists. Top-down mode uses zero height shear. Oblique-height mode uses caller-provided deterministic shear uniforms and the already-extracted debug line Y coordinates.
 
-Phase 21 does not require new Metal primitives. Axes, origin markers, chunk center crosses, central chunk highlights, and radius outlines are all `DebugLine` values. Phase 22 also uses only `DebugLine` values for terrain wireframes. The backend preserves positions, Y height values, and colors through the existing vertex format and shader path.
+Phase 21 does not require new Metal primitives. Axes, origin markers, chunk center crosses, central chunk highlights, and radius outlines are all `DebugLine` values. Phase 22 also uses only `DebugLine` values for terrain wireframes. Phase 23 continues to use the same shader and vertex format, preserving positions, Y height values, colors, and deterministic ordering while only changing projection uniforms.
 
 Phase 20 keeps the projection split clean:
 
@@ -128,6 +129,8 @@ Phase 20 keeps the projection split clean:
 - `TelluricRenderMetal` owns only `MetalDebugLineProjection` uniforms and shader consumption.
 
 The backend receives center X/Z and half extents from the caller through `MetalDrawableFrameDescriptor`. It does not know about key presses, mouse wheels, gameplay cameras, players, or runtime entities. Invalid or collapsed extents must be rejected before creating backend uniforms; app-core validation clamps or resets those values and records diagnostics.
+
+Height exaggeration is not a backend material or terrain system. It is applied before rendering by the app-shell extraction configuration, which scales terrain debug line Y values. Oblique strength is an app-shell multiplier for the backend shear uniforms. Both are deterministic debug visualization controls.
 
 ## Explicitly Unsupported
 
@@ -208,3 +211,5 @@ Phase 17 implements visible debug line drawing only when the app supplies a live
 Phase 20 implements debug camera/projection controls only. It does not implement a gameplay camera, input device system, terrain rendering, asset rendering, debug labels/points, editor UI, or camera controls inside the Metal backend.
 
 Phase 21 keeps debug points and labels unsupported in the drawable path. Essential visual polish is line-based until a later backend phase implements point or text rendering.
+
+Phase 23 still does not implement terrain meshes, terrain normals, lighting, shadows, material or texture rendering, asset rendering, gameplay cameras, editor UI, or a general 3D camera system.

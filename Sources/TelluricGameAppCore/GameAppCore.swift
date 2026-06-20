@@ -88,6 +88,41 @@ private extension GameAppConfig {
 public enum DebugProjectionMode: String, Codable, CaseIterable, Sendable {
     /// Top-down orthographic projection over world X/Z coordinates.
     case topDownOrthographic
+
+    /// Oblique debug projection that maps terrain height into screen space.
+    case obliqueHeight
+
+    /// Parses user-facing projection names accepted by the app shell CLI.
+    public static func parse(_ value: String) -> DebugProjectionMode? {
+        switch value.lowercased() {
+        case "top-down", "topdown", "top_down", "topdownorthographic", "top-down-orthographic":
+            return .topDownOrthographic
+        case "oblique", "oblique-height", "obliqueheight", "height":
+            return .obliqueHeight
+        default:
+            return nil
+        }
+    }
+
+    /// User-facing CLI spelling.
+    public var cliName: String {
+        switch self {
+        case .topDownOrthographic:
+            return "top-down"
+        case .obliqueHeight:
+            return "oblique"
+        }
+    }
+
+    /// Next mode for keyboard cycling.
+    public var next: DebugProjectionMode {
+        switch self {
+        case .topDownOrthographic:
+            return .obliqueHeight
+        case .obliqueHeight:
+            return .topDownOrthographic
+        }
+    }
 }
 
 /// Configuration for app-shell debug camera behavior.
@@ -115,12 +150,12 @@ public struct DebugCameraConfig: Codable, Equatable, Sendable {
 
     /// Creates debug camera configuration.
     public init(
-        projectionMode: DebugProjectionMode = .topDownOrthographic,
+        projectionMode: DebugProjectionMode = .obliqueHeight,
         minimumHalfExtent: Float = 1,
         maximumHalfExtent: Float = 1_000_000,
         zoomStepFactor: Float = 1.2,
         panStepFraction: Float = 0.15,
-        fitMargin: Float = 1.15
+        fitMargin: Float = 1.35
     ) {
         precondition(minimumHalfExtent.isFinite && minimumHalfExtent > 0, "minimumHalfExtent must be finite and positive")
         precondition(maximumHalfExtent.isFinite && maximumHalfExtent >= minimumHalfExtent, "maximumHalfExtent must be finite and at least minimumHalfExtent")
@@ -133,6 +168,20 @@ public struct DebugCameraConfig: Codable, Equatable, Sendable {
         self.zoomStepFactor = zoomStepFactor
         self.panStepFraction = panStepFraction
         self.fitMargin = fitMargin
+    }
+
+    /// Returns updated config by overriding selected fields.
+    public func with(
+        projectionMode: DebugProjectionMode? = nil
+    ) -> DebugCameraConfig {
+        DebugCameraConfig(
+            projectionMode: projectionMode ?? self.projectionMode,
+            minimumHalfExtent: minimumHalfExtent,
+            maximumHalfExtent: maximumHalfExtent,
+            zoomStepFactor: zoomStepFactor,
+            panStepFraction: panStepFraction,
+            fitMargin: fitMargin
+        )
     }
 }
 
@@ -149,6 +198,18 @@ public enum DebugCameraControlIntent: Codable, Equatable, Sendable {
 
     /// Refits the debug camera to the generated chunk grid.
     case reset
+
+    /// Cycles the debug projection mode.
+    case cycleProjectionMode
+
+    /// Increases terrain height exaggeration for debug readability.
+    case increaseHeightExaggeration
+
+    /// Decreases terrain height exaggeration for debug readability.
+    case decreaseHeightExaggeration
+
+    /// Resets terrain height exaggeration to the app-shell default.
+    case resetHeightExaggeration
 
     /// Toggles chunk boundary debug lines.
     case toggleChunkBoundaries
@@ -172,7 +233,7 @@ public enum DebugCameraControlIntent: Codable, Equatable, Sendable {
     case toggleTerrainHeightWireframe
 }
 
-/// Debug-only camera state for top-down chunk-grid visualization.
+/// Debug-only camera state for chunk-grid and terrain visualization.
 public struct DebugCameraState: Codable, Equatable, Sendable {
     /// Projection mode used by this camera state.
     public let projectionMode: DebugProjectionMode
@@ -188,7 +249,7 @@ public struct DebugCameraState: Codable, Equatable, Sendable {
 
     /// Creates debug camera state. Invalid values can be clamped through `validated`.
     public init(
-        projectionMode: DebugProjectionMode = .topDownOrthographic,
+        projectionMode: DebugProjectionMode = .obliqueHeight,
         centerX: Float,
         centerZ: Float,
         halfExtentZ: Float
@@ -280,7 +341,7 @@ public struct DebugCameraState: Codable, Equatable, Sendable {
 
         return DebugCameraValidationResult(
             state: DebugCameraState(
-                projectionMode: cameraConfig.projectionMode,
+                projectionMode: projectionMode,
                 centerX: centerX,
                 centerZ: centerZ,
                 halfExtentZ: clampedHalfExtentZ
@@ -325,8 +386,25 @@ public struct DebugCameraState: Codable, Equatable, Sendable {
             ).validated(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect)
 
         case .reset:
+            let focused = Self.focused(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect)
             return DebugCameraValidationResult(
-                state: Self.focused(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect),
+                state: DebugCameraState(
+                    projectionMode: validState.projectionMode,
+                    centerX: focused.centerX,
+                    centerZ: focused.centerZ,
+                    halfExtentZ: focused.halfExtentZ
+                ),
+                diagnostics: DiagnosticReport(messages: [])
+            )
+
+        case .cycleProjectionMode:
+            return DebugCameraValidationResult(
+                state: DebugCameraState(
+                    projectionMode: validState.projectionMode.next,
+                    centerX: validState.centerX,
+                    centerZ: validState.centerZ,
+                    halfExtentZ: validState.halfExtentZ
+                ),
                 diagnostics: DiagnosticReport(messages: [])
             )
 
@@ -336,7 +414,10 @@ public struct DebugCameraState: Codable, Equatable, Sendable {
              .toggleChunkCenters,
              .toggleCentralChunkHighlight,
              .toggleStreamingRadiusBounds,
-             .toggleTerrainHeightWireframe:
+             .toggleTerrainHeightWireframe,
+             .increaseHeightExaggeration,
+             .decreaseHeightExaggeration,
+             .resetHeightExaggeration:
             return DebugCameraValidationResult(
                 state: validState,
                 diagnostics: DiagnosticReport(messages: [])
@@ -514,6 +595,9 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
     /// Positive debug-only scale applied to terrain heights before rendering.
     public let terrainHeightScale: Float
 
+    /// Non-negative multiplier applied to oblique height projection shears.
+    public let terrainObliqueStrength: Float
+
     /// World-y contribution to debug projection x when terrain preview is enabled.
     public let terrainHeightProjectionShearX: Float
 
@@ -522,6 +606,24 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
 
     /// Default readable debug visual layer set.
     public static let `default` = DebugVisualOptions()
+
+    /// Default terrain height exaggeration used by the app shell.
+    public static let defaultTerrainHeightScale: Float = 2
+
+    /// Minimum terrain height exaggeration accepted by app-shell controls.
+    public static let minimumTerrainHeightScale: Float = 0.125
+
+    /// Maximum terrain height exaggeration accepted by app-shell controls.
+    public static let maximumTerrainHeightScale: Float = 16
+
+    /// Multiplicative keyboard step for terrain height exaggeration.
+    public static let terrainHeightScaleStep: Float = 1.25
+
+    /// Default oblique projection strength.
+    public static let defaultTerrainObliqueStrength: Float = 1
+
+    /// Maximum oblique projection strength accepted by app-shell controls.
+    public static let maximumTerrainObliqueStrength: Float = 4
 
     /// Creates debug visual options.
     public init(
@@ -533,12 +635,15 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
         showStreamingRadiusBounds: Bool = true,
         showTerrainHeightWireframe: Bool = true,
         terrainWireframeStride: Int = 4,
-        terrainHeightScale: Float = 1,
-        terrainHeightProjectionShearX: Float = 0.12,
-        terrainHeightProjectionShearZ: Float = 0.35
+        terrainHeightScale: Float = Self.defaultTerrainHeightScale,
+        terrainObliqueStrength: Float = Self.defaultTerrainObliqueStrength,
+        terrainHeightProjectionShearX: Float = 0.22,
+        terrainHeightProjectionShearZ: Float = 0.45
     ) {
         precondition(terrainWireframeStride > 0, "terrainWireframeStride must be positive")
         precondition(terrainHeightScale.isFinite && terrainHeightScale > 0, "terrainHeightScale must be finite and positive")
+        precondition(terrainObliqueStrength.isFinite && terrainObliqueStrength >= 0, "terrainObliqueStrength must be finite and non-negative")
+        precondition(terrainObliqueStrength <= Self.maximumTerrainObliqueStrength, "terrainObliqueStrength must be within the supported debug range")
         precondition(terrainHeightProjectionShearX.isFinite, "terrainHeightProjectionShearX must be finite")
         precondition(terrainHeightProjectionShearZ.isFinite, "terrainHeightProjectionShearZ must be finite")
         self.showChunkBoundaries = showChunkBoundaries
@@ -550,6 +655,7 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
         self.showTerrainHeightWireframe = showTerrainHeightWireframe
         self.terrainWireframeStride = terrainWireframeStride
         self.terrainHeightScale = terrainHeightScale
+        self.terrainObliqueStrength = terrainObliqueStrength
         self.terrainHeightProjectionShearX = terrainHeightProjectionShearX
         self.terrainHeightProjectionShearZ = terrainHeightProjectionShearZ
     }
@@ -592,6 +698,7 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
         showTerrainHeightWireframe: Bool? = nil,
         terrainWireframeStride: Int? = nil,
         terrainHeightScale: Float? = nil,
+        terrainObliqueStrength: Float? = nil,
         terrainHeightProjectionShearX: Float? = nil,
         terrainHeightProjectionShearZ: Float? = nil
     ) -> DebugVisualOptions {
@@ -605,6 +712,7 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
             showTerrainHeightWireframe: showTerrainHeightWireframe ?? self.showTerrainHeightWireframe,
             terrainWireframeStride: terrainWireframeStride ?? self.terrainWireframeStride,
             terrainHeightScale: terrainHeightScale ?? self.terrainHeightScale,
+            terrainObliqueStrength: terrainObliqueStrength ?? self.terrainObliqueStrength,
             terrainHeightProjectionShearX: terrainHeightProjectionShearX ?? self.terrainHeightProjectionShearX,
             terrainHeightProjectionShearZ: terrainHeightProjectionShearZ ?? self.terrainHeightProjectionShearZ
         )
@@ -627,9 +735,23 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
             return with(showStreamingRadiusBounds: !showStreamingRadiusBounds)
         case .toggleTerrainHeightWireframe:
             return with(showTerrainHeightWireframe: !showTerrainHeightWireframe)
-        case .zoomIn, .zoomOut, .pan(_, _), .reset:
+        case .increaseHeightExaggeration:
+            return with(terrainHeightScale: Self.clampedTerrainHeightScale(terrainHeightScale * Self.terrainHeightScaleStep))
+        case .decreaseHeightExaggeration:
+            return with(terrainHeightScale: Self.clampedTerrainHeightScale(terrainHeightScale / Self.terrainHeightScaleStep))
+        case .resetHeightExaggeration:
+            return with(terrainHeightScale: Self.defaultTerrainHeightScale)
+        case .zoomIn, .zoomOut, .pan(_, _), .reset, .cycleProjectionMode:
             return self
         }
+    }
+
+    private static func clampedTerrainHeightScale(_ value: Float) -> Float {
+        guard value.isFinite else {
+            return defaultTerrainHeightScale
+        }
+
+        return Swift.max(minimumTerrainHeightScale, Swift.min(maximumTerrainHeightScale, value))
     }
 }
 
@@ -668,6 +790,9 @@ public struct GameAppArguments: Equatable, Sendable {
     /// Debug visual layer options used by render extraction.
     public let debugVisualOptions: DebugVisualOptions
 
+    /// Debug camera/projection configuration used by the app shell.
+    public let debugCameraConfig: DebugCameraConfig
+
     /// Prints per-frame summary lines.
     public let verbose: Bool
 
@@ -689,6 +814,7 @@ public struct GameAppArguments: Equatable, Sendable {
         frameLimit: Int? = nil,
         diagnosticsReportPath: String? = nil,
         debugVisualOptions: DebugVisualOptions = .default,
+        debugCameraConfig: DebugCameraConfig = .default,
         verbose: Bool = false,
         quiet: Bool = false,
         logEvery: Int? = nil,
@@ -701,6 +827,7 @@ public struct GameAppArguments: Equatable, Sendable {
         self.frameLimit = frameLimit
         self.diagnosticsReportPath = diagnosticsReportPath
         self.debugVisualOptions = debugVisualOptions
+        self.debugCameraConfig = debugCameraConfig
         self.verbose = verbose
         self.quiet = quiet
         self.logEvery = logEvery
@@ -755,6 +882,7 @@ public enum GameAppArgumentParser {
         var frameLimit: Int?
         var diagnosticsReportPath: String?
         var debugVisualOptions = DebugVisualOptions.default
+        var debugCameraConfig = DebugCameraConfig.default
         var verbose = false
         var quiet = false
         var logEvery: Int?
@@ -872,6 +1000,46 @@ public enum GameAppArgumentParser {
                 debugVisualOptions = debugVisualOptions.with(terrainHeightScale: parsed)
                 index += 2
 
+            case "--height-exaggeration":
+                let value = try value(after: option, index: index, arguments: arguments)
+                guard let parsed = Float(value), parsed.isFinite, parsed > 0 else {
+                    throw GameAppArgumentError.invalidValue(
+                        option: option,
+                        value: value,
+                        reason: "Expected a finite positive number."
+                    )
+                }
+                debugVisualOptions = debugVisualOptions.with(terrainHeightScale: parsed)
+                index += 2
+
+            case "--oblique-strength":
+                let value = try value(after: option, index: index, arguments: arguments)
+                guard let parsed = Float(value),
+                      parsed.isFinite,
+                      parsed >= 0,
+                      parsed <= DebugVisualOptions.maximumTerrainObliqueStrength
+                else {
+                    throw GameAppArgumentError.invalidValue(
+                        option: option,
+                        value: value,
+                        reason: "Expected a finite number from 0 through \(DebugVisualOptions.maximumTerrainObliqueStrength)."
+                    )
+                }
+                debugVisualOptions = debugVisualOptions.with(terrainObliqueStrength: parsed)
+                index += 2
+
+            case "--projection":
+                let value = try value(after: option, index: index, arguments: arguments)
+                guard let parsed = DebugProjectionMode.parse(value) else {
+                    throw GameAppArgumentError.invalidValue(
+                        option: option,
+                        value: value,
+                        reason: "Expected top-down or oblique."
+                    )
+                }
+                debugCameraConfig = debugCameraConfig.with(projectionMode: parsed)
+                index += 2
+
             case "--seed":
                 let value = try value(after: option, index: index, arguments: arguments)
                 guard let parsed = UInt64(value) else {
@@ -959,6 +1127,7 @@ public enum GameAppArgumentParser {
             frameLimit: frameLimit,
             diagnosticsReportPath: diagnosticsReportPath,
             debugVisualOptions: debugVisualOptions,
+            debugCameraConfig: debugCameraConfig,
             verbose: verbose,
             quiet: quiet,
             logEvery: logEvery,
@@ -980,7 +1149,7 @@ public enum GameAppArgumentParser {
 public enum GameAppHelp {
     public static let text = """
     Usage:
-      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--dry-run|--smoke|--run] [--frames <Int>] [--diagnostics-report <path>] [--verbose|--quiet] [--log-every <Int>]
+      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--projection top-down|oblique] [--dry-run|--smoke|--run] [--frames <Int>] [--diagnostics-report <path>] [--verbose|--quiet] [--log-every <Int>]
 
     Options:
       --seed <UInt64>           Root deterministic world seed. Defaults to 1.
@@ -1007,7 +1176,12 @@ public enum GameAppHelp {
       --hide-terrain           Hide deterministic terrain height wireframe debug lines.
       --terrain-stride <Int>   Positive sample stride for terrain wireframe extraction. Defaults to 4.
       --terrain-height-scale <Float>
-                                Positive debug-only terrain height scale. Defaults to 1.
+                                Positive debug-only terrain height scale. Defaults to 2.
+      --height-exaggeration <Float>
+                                Alias for --terrain-height-scale.
+      --projection <mode>      Debug projection mode: top-down or oblique. Defaults to oblique.
+      --oblique-strength <Float>
+                                Non-negative oblique height projection strength. Defaults to 1.
       --help, -h               Show this help text.
     """
 }
@@ -1156,11 +1330,15 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
     public let debugVisualOptions: DebugVisualOptions
     public let debugVisualLayersEnabled: [String]
     public let debugProjectionMode: DebugProjectionMode
+    public let terrainHeightExaggeration: Float
+    public let terrainObliqueStrength: Float
     public let debugCameraCenterX: Float
     public let debugCameraCenterZ: Float
     public let debugCameraHalfExtentZ: Float
     public let debugProjectionHalfExtentX: Float
     public let debugProjectionHalfExtentZ: Float
+    public let debugProjectionHeightShearX: Float
+    public let debugProjectionHeightShearZ: Float
     public let debugViewportWidth: Int
     public let debugViewportHeight: Int
     public let mtkViewAvailable: Bool
@@ -1201,11 +1379,15 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
         self.debugVisualOptions = frameResult.debugVisualOptions
         self.debugVisualLayersEnabled = frameResult.debugVisualOptions.enabledLayerNames
         self.debugProjectionMode = frameResult.debugCameraState.projectionMode
+        self.terrainHeightExaggeration = frameResult.debugVisualOptions.terrainHeightScale
+        self.terrainObliqueStrength = frameResult.debugVisualOptions.terrainObliqueStrength
         self.debugCameraCenterX = frameResult.debugCameraState.centerX
         self.debugCameraCenterZ = frameResult.debugCameraState.centerZ
         self.debugCameraHalfExtentZ = frameResult.debugCameraState.halfExtentZ
         self.debugProjectionHalfExtentX = frameResult.debugProjection.halfExtentX
         self.debugProjectionHalfExtentZ = frameResult.debugProjection.halfExtentZ
+        self.debugProjectionHeightShearX = frameResult.debugProjection.heightShearX
+        self.debugProjectionHeightShearZ = frameResult.debugProjection.heightShearZ
         self.debugViewportWidth = frameResult.debugViewportWidth
         self.debugViewportHeight = frameResult.debugViewportHeight
         self.mtkViewAvailable = mtkViewAvailable
@@ -1242,11 +1424,15 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
     public let debugVisualOptions: DebugVisualOptions?
     public let debugVisualLayersEnabled: [String]
     public let debugProjectionMode: DebugProjectionMode?
+    public let terrainHeightExaggeration: Float?
+    public let terrainObliqueStrength: Float?
     public let debugCameraCenterX: Float?
     public let debugCameraCenterZ: Float?
     public let debugCameraHalfExtentZ: Float?
     public let debugProjectionHalfExtentX: Float?
     public let debugProjectionHalfExtentZ: Float?
+    public let debugProjectionHeightShearX: Float?
+    public let debugProjectionHeightShearZ: Float?
     public let debugViewportWidth: Int?
     public let debugViewportHeight: Int?
     public let drawCallsAttempted: Int
@@ -1292,11 +1478,15 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
         self.debugVisualOptions = frames.last?.debugVisualOptions
         self.debugVisualLayersEnabled = frames.last?.debugVisualLayersEnabled ?? []
         self.debugProjectionMode = frames.last?.debugProjectionMode
+        self.terrainHeightExaggeration = frames.last?.terrainHeightExaggeration
+        self.terrainObliqueStrength = frames.last?.terrainObliqueStrength
         self.debugCameraCenterX = frames.last?.debugCameraCenterX
         self.debugCameraCenterZ = frames.last?.debugCameraCenterZ
         self.debugCameraHalfExtentZ = frames.last?.debugCameraHalfExtentZ
         self.debugProjectionHalfExtentX = frames.last?.debugProjectionHalfExtentX
         self.debugProjectionHalfExtentZ = frames.last?.debugProjectionHalfExtentZ
+        self.debugProjectionHeightShearX = frames.last?.debugProjectionHeightShearX
+        self.debugProjectionHeightShearZ = frames.last?.debugProjectionHeightShearZ
         self.debugViewportWidth = frames.last?.debugViewportWidth
         self.debugViewportHeight = frames.last?.debugViewportHeight
         self.drawCallsAttempted = frames.filter(\.drawCallAttempted).count
@@ -1464,12 +1654,15 @@ public struct GameAppPipeline: Sendable {
              .toggleChunkCenters,
              .toggleCentralChunkHighlight,
              .toggleStreamingRadiusBounds,
-             .toggleTerrainHeightWireframe:
+             .toggleTerrainHeightWireframe,
+             .increaseHeightExaggeration,
+             .decreaseHeightExaggeration,
+             .resetHeightExaggeration:
             debugVisualOptions = debugVisualOptions.applying(intent)
             extractionConfig = Self.extractionConfig(config: config, visualOptions: debugVisualOptions)
             return DiagnosticReport(messages: [])
 
-        case .zoomIn, .zoomOut, .pan(_, _), .reset:
+        case .zoomIn, .zoomOut, .pan(_, _), .reset, .cycleProjectionMode:
             break
         }
 
@@ -1514,7 +1707,8 @@ public struct GameAppPipeline: Sendable {
         debugCameraState = projection.state
         let debugLineProjection = Self.debugLineProjection(
             baseProjection: projection.projection,
-            visualOptions: debugVisualOptions
+            visualOptions: debugVisualOptions,
+            projectionMode: projection.state.projectionMode
         )
         let metalFrame = metalBackend.render(
             snapshot: extraction.renderSnapshot,
@@ -1720,15 +1914,18 @@ public struct GameAppPipeline: Sendable {
 
     private static func debugLineProjection(
         baseProjection: MetalDebugLineProjection,
-        visualOptions: DebugVisualOptions
+        visualOptions: DebugVisualOptions,
+        projectionMode: DebugProjectionMode
     ) -> MetalDebugLineProjection {
-        MetalDebugLineProjection(
+        let usesHeightProjection = visualOptions.showTerrainHeightWireframe && projectionMode == .obliqueHeight
+        let obliqueStrength = usesHeightProjection ? visualOptions.terrainObliqueStrength : 0
+        return MetalDebugLineProjection(
             centerX: baseProjection.centerX,
             centerZ: baseProjection.centerZ,
             halfExtentX: baseProjection.halfExtentX,
             halfExtentZ: baseProjection.halfExtentZ,
-            heightShearX: visualOptions.showTerrainHeightWireframe ? visualOptions.terrainHeightProjectionShearX : 0,
-            heightShearZ: visualOptions.showTerrainHeightWireframe ? visualOptions.terrainHeightProjectionShearZ : 0
+            heightShearX: visualOptions.terrainHeightProjectionShearX * obliqueStrength,
+            heightShearZ: visualOptions.terrainHeightProjectionShearZ * obliqueStrength
         )
     }
 
@@ -1844,6 +2041,7 @@ public enum GameAppRuntime {
     public static func dryRun(arguments: GameAppArguments) throws -> GameAppDryRunResult {
         var pipeline = try GameAppPipeline(
             config: arguments.config,
+            debugCameraConfig: arguments.debugCameraConfig,
             debugVisualOptions: arguments.debugVisualOptions
         )
         var frames: [GameAppFrameResult] = []
@@ -1919,6 +2117,9 @@ public enum GameAppRuntime {
             lines.append("debug camera half extent z: \(finalFrame.debugCameraState.halfExtentZ)")
             lines.append("debug projection half extent x: \(finalFrame.debugProjection.halfExtentX)")
             lines.append("debug projection mode: \(finalFrame.debugCameraState.projectionMode.rawValue)")
+            lines.append("terrain height exaggeration: \(finalFrame.debugVisualOptions.terrainHeightScale)")
+            lines.append("terrain oblique strength: \(finalFrame.debugVisualOptions.terrainObliqueStrength)")
+            lines.append("debug projection height shear: \(finalFrame.debugProjection.heightShearX), \(finalFrame.debugProjection.heightShearZ)")
             lines.append("debug viewport: \(finalFrame.debugViewportWidth)x\(finalFrame.debugViewportHeight)")
         }
 

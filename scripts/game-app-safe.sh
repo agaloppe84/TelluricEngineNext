@@ -12,6 +12,7 @@ Usage:
   ./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8
   ./scripts/game-app-safe.sh --run --diagnostics-report Tools/benchmarks/game_app_visual_report.json
   ./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --show-terrain --terrain-stride 4 --terrain-height-scale 1.0 --diagnostics-report Tools/benchmarks/game_app_terrain_debug_report.json
+  ./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --projection oblique --height-exaggeration 2.0 --diagnostics-report Tools/benchmarks/game_app_projection_report.json
 
 The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under .build/.
 All other arguments are forwarded to telluric-game-app.

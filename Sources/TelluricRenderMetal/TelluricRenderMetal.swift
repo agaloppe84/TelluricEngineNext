@@ -154,10 +154,10 @@ public struct MetalDebugLineProjection: Codable, Equatable, Hashable, Sendable {
     /// Positive world z half extent mapped to clip-space y `-1...1`.
     public let halfExtentZ: Float
 
-    /// World y contribution to projected x. Zero keeps a pure top-down projection.
+    /// World y contribution to projected x. Zero keeps a pure X/Z projection.
     public let heightShearX: Float
 
-    /// World y contribution to projected z. Zero keeps a pure top-down projection.
+    /// World y contribution to projected z. Zero keeps a pure X/Z projection.
     public let heightShearZ: Float
 
     /// Creates a debug projection. Height shears are debug-only and do not represent a gameplay camera.
@@ -204,7 +204,7 @@ public struct MetalDrawableFrameDescriptor: Codable, Equatable, Hashable, Sendab
     /// Clear color applied before debug lines are drawn.
     public let clearColor: MetalDrawableClearColor
 
-    /// Debug-only top-down projection.
+    /// Debug-only projection for line visualization.
     public let debugLineProjection: MetalDebugLineProjection
 
     /// Creates a drawable frame descriptor.

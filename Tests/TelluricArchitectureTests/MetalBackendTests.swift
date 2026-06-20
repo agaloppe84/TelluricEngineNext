@@ -42,13 +42,13 @@ final class MetalBackendTests: XCTestCase {
             centerZ: 3,
             halfExtentX: 16,
             halfExtentZ: 12,
-            heightShearX: 0.12,
-            heightShearZ: 0.35
+            heightShearX: 0.22,
+            heightShearZ: 0.45
         )
 
         XCTAssertEqual(try roundTrip(projection), projection)
-        XCTAssertEqual(projection.heightShearX, 0.12)
-        XCTAssertEqual(projection.heightShearZ, 0.35)
+        XCTAssertEqual(projection.heightShearX, 0.22)
+        XCTAssertEqual(projection.heightShearZ, 0.45)
     }
 
     func testBackendReportsUnavailableGracefullyIfNoDeviceExists() {
@@ -213,6 +213,7 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertFalse(contents.contains("TelluricDebugLineVertex vertex ="))
         XCTAssertFalse(contents.contains("float4 vertex ="))
         XCTAssertFalse(contents.contains("float4 fragment ="))
+        XCTAssertFalse(contents.contains("TelluricDebugLineUniforms uniforms ="))
         XCTAssertTrue(contents.contains("TelluricDebugLineVertex debugVertex ="))
         XCTAssertTrue(contents.contains("debugVertex.positionX"))
         XCTAssertTrue(contents.contains("debugVertex.positionY * uniforms.heightShearX"))
