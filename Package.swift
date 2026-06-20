@@ -48,7 +48,7 @@ let package = Package(
         .target(name: "TelluricRuntime", dependencies: ["TelluricCore", "TelluricDeterminism", "TelluricDiagnostics", "TelluricAssets", "TelluricSimulation", "TelluricWorld", "TelluricTerrain", "TelluricBiomes", "TelluricStreaming", "TelluricPersistence"]),
         .target(name: "TelluricGame", dependencies: ["TelluricCore", "TelluricMath", "TelluricDeterminism", "TelluricDiagnostics", "TelluricECS", "TelluricSimulation", "TelluricStreaming", "TelluricRuntime"]),
         .target(name: "TelluricRender", dependencies: ["TelluricCore", "TelluricMath", "TelluricDeterminism", "TelluricAssets"]),
-        .target(name: "TelluricRenderExtraction", dependencies: ["TelluricCore", "TelluricDiagnostics", "TelluricMath", "TelluricRender", "TelluricRuntime", "TelluricWorld"]),
+        .target(name: "TelluricRenderExtraction", dependencies: ["TelluricCore", "TelluricDiagnostics", "TelluricMath", "TelluricRender", "TelluricRuntime", "TelluricWorld", "TelluricTerrain"]),
         .target(name: "TelluricRenderMetal", dependencies: ["TelluricCore", "TelluricDiagnostics", "TelluricRender"]),
 
         .target(name: "TelluricSeedValidatorCore", dependencies: ["TelluricCore", "TelluricDeterminism", "TelluricWorld", "TelluricTerrain", "TelluricBiomes", "TelluricDiagnostics"]),

@@ -6,6 +6,7 @@ Phase 17 adds the first minimal drawable debug-line render pass.
 Phase 18 hardens app-shell visual smoke reporting around that drawable path.
 Phase 20 feeds the drawable pass with app-shell debug camera projection controls.
 Phase 21 improves the debug line set and colors without changing the backend boundary.
+Phase 22 lets those debug lines include terrain height wireframes and a debug-only height shear projection.
 
 This is the backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
 
@@ -92,7 +93,7 @@ The pipeline is:
 5. pack the vertices into an internal Metal-side layout;
 6. create an `MTLBuffer` when a `MetalDeviceContext` is available;
 7. build a minimal Metal render pipeline state;
-8. map line `x/z` world coordinates through a debug-only top-down orthographic projection;
+8. map line world coordinates through a debug-only projection; height shear is zero for top-down grids and non-zero for terrain preview;
 9. encode `.line` primitives into the caller's render pass descriptor;
 10. present the caller's drawable.
 
@@ -111,14 +112,14 @@ The drawable pass draws only `DebugLine` primitives from `RenderSnapshot`.
 It uses:
 
 - `MetalDrawableFrameDescriptor` for frame index, viewport, clear color, pixel format, and debug projection;
-- `MetalDebugLineProjection` for a debug-only top-down orthographic mapping from world `x/z` to clip space;
+- `MetalDebugLineProjection` for a debug-only mapping from world `x/z` to clip space, with optional Y height shear for terrain preview;
 - embedded minimal Metal shader source;
 - the existing prepared debug line vertex buffer;
 - caller-owned drawable and render pass descriptor.
 
-The pass clears the drawable and draws line primitives. It does not interpret `CameraSnapshot` yet; the top-down projection is explicitly debug-only so chunk grids are visible before terrain/camera rendering exists.
+The pass clears the drawable and draws line primitives. It does not interpret `CameraSnapshot` yet; the projection is explicitly debug-only so chunk grids and terrain height wireframes are visible before terrain/camera rendering exists.
 
-Phase 21 does not require new Metal primitives. Axes, origin markers, chunk center crosses, central chunk highlights, and radius outlines are all `DebugLine` values. The backend preserves their positions and colors through the existing vertex format and shader path.
+Phase 21 does not require new Metal primitives. Axes, origin markers, chunk center crosses, central chunk highlights, and radius outlines are all `DebugLine` values. Phase 22 also uses only `DebugLine` values for terrain wireframes. The backend preserves positions, Y height values, and colors through the existing vertex format and shader path.
 
 Phase 20 keeps the projection split clean:
 
@@ -137,6 +138,7 @@ The backend still reports unsupported diagnostics for:
 - debug point drawing;
 - debug label drawing;
 - terrain mesh rendering;
+- terrain material or texture rendering;
 - asset rendering.
 
 Phase 17 no longer reports drawable debug-line presentation as unsupported when a drawable and render pass descriptor are supplied. The older headless `render(snapshot:)` API still reports drawable presentation as unsupported if the caller asks that preparation-only API to require a drawable.

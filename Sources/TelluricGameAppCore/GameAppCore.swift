@@ -167,6 +167,9 @@ public enum DebugCameraControlIntent: Codable, Equatable, Sendable {
 
     /// Toggles the streaming radius outline.
     case toggleStreamingRadiusBounds
+
+    /// Toggles deterministic terrain height wireframe debug lines.
+    case toggleTerrainHeightWireframe
 }
 
 /// Debug-only camera state for top-down chunk-grid visualization.
@@ -332,7 +335,8 @@ public struct DebugCameraState: Codable, Equatable, Sendable {
              .toggleOriginMarker,
              .toggleChunkCenters,
              .toggleCentralChunkHighlight,
-             .toggleStreamingRadiusBounds:
+             .toggleStreamingRadiusBounds,
+             .toggleTerrainHeightWireframe:
             return DebugCameraValidationResult(
                 state: validState,
                 diagnostics: DiagnosticReport(messages: [])
@@ -501,6 +505,21 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
     /// Draws the current resident streaming footprint outline.
     public let showStreamingRadiusBounds: Bool
 
+    /// Draws deterministic terrain heightfields as debug wireframe lines.
+    public let showTerrainHeightWireframe: Bool
+
+    /// Positive sample stride used for terrain wireframe extraction.
+    public let terrainWireframeStride: Int
+
+    /// Positive debug-only scale applied to terrain heights before rendering.
+    public let terrainHeightScale: Float
+
+    /// World-y contribution to debug projection x when terrain preview is enabled.
+    public let terrainHeightProjectionShearX: Float
+
+    /// World-y contribution to debug projection z when terrain preview is enabled.
+    public let terrainHeightProjectionShearZ: Float
+
     /// Default readable debug visual layer set.
     public static let `default` = DebugVisualOptions()
 
@@ -511,14 +530,28 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
         showOriginMarker: Bool = true,
         showChunkCenters: Bool = false,
         showCentralChunkHighlight: Bool = true,
-        showStreamingRadiusBounds: Bool = true
+        showStreamingRadiusBounds: Bool = true,
+        showTerrainHeightWireframe: Bool = true,
+        terrainWireframeStride: Int = 4,
+        terrainHeightScale: Float = 1,
+        terrainHeightProjectionShearX: Float = 0.12,
+        terrainHeightProjectionShearZ: Float = 0.35
     ) {
+        precondition(terrainWireframeStride > 0, "terrainWireframeStride must be positive")
+        precondition(terrainHeightScale.isFinite && terrainHeightScale > 0, "terrainHeightScale must be finite and positive")
+        precondition(terrainHeightProjectionShearX.isFinite, "terrainHeightProjectionShearX must be finite")
+        precondition(terrainHeightProjectionShearZ.isFinite, "terrainHeightProjectionShearZ must be finite")
         self.showChunkBoundaries = showChunkBoundaries
         self.showWorldAxes = showWorldAxes
         self.showOriginMarker = showOriginMarker
         self.showChunkCenters = showChunkCenters
         self.showCentralChunkHighlight = showCentralChunkHighlight
         self.showStreamingRadiusBounds = showStreamingRadiusBounds
+        self.showTerrainHeightWireframe = showTerrainHeightWireframe
+        self.terrainWireframeStride = terrainWireframeStride
+        self.terrainHeightScale = terrainHeightScale
+        self.terrainHeightProjectionShearX = terrainHeightProjectionShearX
+        self.terrainHeightProjectionShearZ = terrainHeightProjectionShearZ
     }
 
     /// Ordered human-readable enabled layer names for diagnostics reports.
@@ -542,6 +575,9 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
         if showStreamingRadiusBounds {
             names.append("streamingRadiusBounds")
         }
+        if showTerrainHeightWireframe {
+            names.append("terrainHeightWireframe")
+        }
         return names
     }
 
@@ -552,7 +588,12 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
         showOriginMarker: Bool? = nil,
         showChunkCenters: Bool? = nil,
         showCentralChunkHighlight: Bool? = nil,
-        showStreamingRadiusBounds: Bool? = nil
+        showStreamingRadiusBounds: Bool? = nil,
+        showTerrainHeightWireframe: Bool? = nil,
+        terrainWireframeStride: Int? = nil,
+        terrainHeightScale: Float? = nil,
+        terrainHeightProjectionShearX: Float? = nil,
+        terrainHeightProjectionShearZ: Float? = nil
     ) -> DebugVisualOptions {
         DebugVisualOptions(
             showChunkBoundaries: showChunkBoundaries ?? self.showChunkBoundaries,
@@ -560,7 +601,12 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
             showOriginMarker: showOriginMarker ?? self.showOriginMarker,
             showChunkCenters: showChunkCenters ?? self.showChunkCenters,
             showCentralChunkHighlight: showCentralChunkHighlight ?? self.showCentralChunkHighlight,
-            showStreamingRadiusBounds: showStreamingRadiusBounds ?? self.showStreamingRadiusBounds
+            showStreamingRadiusBounds: showStreamingRadiusBounds ?? self.showStreamingRadiusBounds,
+            showTerrainHeightWireframe: showTerrainHeightWireframe ?? self.showTerrainHeightWireframe,
+            terrainWireframeStride: terrainWireframeStride ?? self.terrainWireframeStride,
+            terrainHeightScale: terrainHeightScale ?? self.terrainHeightScale,
+            terrainHeightProjectionShearX: terrainHeightProjectionShearX ?? self.terrainHeightProjectionShearX,
+            terrainHeightProjectionShearZ: terrainHeightProjectionShearZ ?? self.terrainHeightProjectionShearZ
         )
     }
 
@@ -579,6 +625,8 @@ public struct DebugVisualOptions: Codable, Equatable, Sendable {
             return with(showCentralChunkHighlight: !showCentralChunkHighlight)
         case .toggleStreamingRadiusBounds:
             return with(showStreamingRadiusBounds: !showStreamingRadiusBounds)
+        case .toggleTerrainHeightWireframe:
+            return with(showTerrainHeightWireframe: !showTerrainHeightWireframe)
         case .zoomIn, .zoomOut, .pan(_, _), .reset:
             return self
         }
@@ -792,6 +840,38 @@ public enum GameAppArgumentParser {
                 debugVisualOptions = debugVisualOptions.with(showStreamingRadiusBounds: false)
                 index += 1
 
+            case "--show-terrain":
+                debugVisualOptions = debugVisualOptions.with(showTerrainHeightWireframe: true)
+                index += 1
+
+            case "--hide-terrain":
+                debugVisualOptions = debugVisualOptions.with(showTerrainHeightWireframe: false)
+                index += 1
+
+            case "--terrain-stride":
+                let value = try value(after: option, index: index, arguments: arguments)
+                guard let parsed = Int(value), parsed > 0 else {
+                    throw GameAppArgumentError.invalidValue(
+                        option: option,
+                        value: value,
+                        reason: "Expected a positive integer."
+                    )
+                }
+                debugVisualOptions = debugVisualOptions.with(terrainWireframeStride: parsed)
+                index += 2
+
+            case "--terrain-height-scale":
+                let value = try value(after: option, index: index, arguments: arguments)
+                guard let parsed = Float(value), parsed.isFinite, parsed > 0 else {
+                    throw GameAppArgumentError.invalidValue(
+                        option: option,
+                        value: value,
+                        reason: "Expected a finite positive number."
+                    )
+                }
+                debugVisualOptions = debugVisualOptions.with(terrainHeightScale: parsed)
+                index += 2
+
             case "--seed":
                 let value = try value(after: option, index: index, arguments: arguments)
                 guard let parsed = UInt64(value) else {
@@ -923,6 +1003,11 @@ public enum GameAppHelp {
       --hide-centers           Hide resident chunk center crosses.
       --hide-central-highlight Hide the chunk (0,0) accent boundary.
       --hide-radius-bounds     Hide the resident streaming footprint outline.
+      --show-terrain           Show deterministic terrain height wireframe debug lines.
+      --hide-terrain           Hide deterministic terrain height wireframe debug lines.
+      --terrain-stride <Int>   Positive sample stride for terrain wireframe extraction. Defaults to 4.
+      --terrain-height-scale <Float>
+                                Positive debug-only terrain height scale. Defaults to 1.
       --help, -h               Show this help text.
     """
 }
@@ -970,6 +1055,7 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
     public let preparedDebugLineCount: Int
     public let preparedDebugLineVertexCount: Int
     public let preparedDebugLineBufferByteLength: Int
+    public let terrainDebugLineCount: Int
     public let debugVisualOptions: DebugVisualOptions
     public let debugCameraState: DebugCameraState
     public let debugProjection: MetalDebugLineProjection
@@ -992,6 +1078,7 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
         preparedDebugLineCount: Int,
         preparedDebugLineVertexCount: Int,
         preparedDebugLineBufferByteLength: Int,
+        terrainDebugLineCount: Int,
         debugVisualOptions: DebugVisualOptions,
         debugCameraState: DebugCameraState,
         debugProjection: MetalDebugLineProjection,
@@ -1012,6 +1099,7 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
         self.preparedDebugLineCount = preparedDebugLineCount
         self.preparedDebugLineVertexCount = preparedDebugLineVertexCount
         self.preparedDebugLineBufferByteLength = preparedDebugLineBufferByteLength
+        self.terrainDebugLineCount = terrainDebugLineCount
         self.debugVisualOptions = debugVisualOptions
         self.debugCameraState = debugCameraState
         self.debugProjection = debugProjection
@@ -1064,6 +1152,7 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
     public let renderSnapshotHash: StableHash
     public let debugLinesExtracted: Int
     public let debugVerticesPrepared: Int
+    public let terrainDebugLinesExtracted: Int
     public let debugVisualOptions: DebugVisualOptions
     public let debugVisualLayersEnabled: [String]
     public let debugProjectionMode: DebugProjectionMode
@@ -1108,6 +1197,7 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
         self.renderSnapshotHash = frameResult.renderSnapshotHash
         self.debugLinesExtracted = frameResult.preparedDebugLineCount
         self.debugVerticesPrepared = frameResult.preparedDebugLineVertexCount
+        self.terrainDebugLinesExtracted = frameResult.terrainDebugLineCount
         self.debugVisualOptions = frameResult.debugVisualOptions
         self.debugVisualLayersEnabled = frameResult.debugVisualOptions.enabledLayerNames
         self.debugProjectionMode = frameResult.debugCameraState.projectionMode
@@ -1146,6 +1236,7 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
     public let drawableAvailable: Bool
     public let debugLinesExtracted: Int
     public let debugVerticesPrepared: Int
+    public let terrainDebugLinesExtracted: Int
     public let drawnDebugLines: Int
     public let drawnDebugLineVertices: Int
     public let debugVisualOptions: DebugVisualOptions?
@@ -1195,6 +1286,7 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
         self.drawableAvailable = drawableAvailable
         self.debugLinesExtracted = frames.last?.debugLinesExtracted ?? 0
         self.debugVerticesPrepared = frames.last?.debugVerticesPrepared ?? 0
+        self.terrainDebugLinesExtracted = frames.last?.terrainDebugLinesExtracted ?? 0
         self.drawnDebugLines = frames.last?.drawnDebugLines ?? 0
         self.drawnDebugLineVertices = frames.last?.drawnDebugLineVertices ?? 0
         self.debugVisualOptions = frames.last?.debugVisualOptions
@@ -1371,7 +1463,8 @@ public struct GameAppPipeline: Sendable {
              .toggleOriginMarker,
              .toggleChunkCenters,
              .toggleCentralChunkHighlight,
-             .toggleStreamingRadiusBounds:
+             .toggleStreamingRadiusBounds,
+             .toggleTerrainHeightWireframe:
             debugVisualOptions = debugVisualOptions.applying(intent)
             extractionConfig = Self.extractionConfig(config: config, visualOptions: debugVisualOptions)
             return DiagnosticReport(messages: [])
@@ -1419,6 +1512,10 @@ public struct GameAppPipeline: Sendable {
             cameraConfig: debugCameraConfig
         )
         debugCameraState = projection.state
+        let debugLineProjection = Self.debugLineProjection(
+            baseProjection: projection.projection,
+            visualOptions: debugVisualOptions
+        )
         let metalFrame = metalBackend.render(
             snapshot: extraction.renderSnapshot,
             descriptor: MetalRenderFrameDescriptor(
@@ -1452,9 +1549,10 @@ public struct GameAppPipeline: Sendable {
             preparedDebugLineCount: metalFrame.preparedDebugLineCount,
             preparedDebugLineVertexCount: metalFrame.preparedDebugLineVertexCount,
             preparedDebugLineBufferByteLength: metalFrame.preparedDebugLineBufferByteLength,
+            terrainDebugLineCount: Self.terrainDebugLineCount(in: extraction.renderSnapshot),
             debugVisualOptions: debugVisualOptions,
             debugCameraState: projection.state,
-            debugProjection: projection.projection,
+            debugProjection: debugLineProjection,
             debugViewportWidth: projection.viewportWidth,
             debugViewportHeight: projection.viewportHeight,
             metalAvailable: metalBackend.isAvailable,
@@ -1468,12 +1566,12 @@ public struct GameAppPipeline: Sendable {
             frameResult: frameResult,
             renderSnapshot: extraction.renderSnapshot,
             drawableDescriptor: Self.drawableDescriptor(
-                frameIndex: runtimeSnapshot.state.frameIndex,
-                config: config,
-                projection: projection.projection,
-                viewportWidth: projection.viewportWidth,
-                viewportHeight: projection.viewportHeight
-            )
+            frameIndex: runtimeSnapshot.state.frameIndex,
+            config: config,
+            projection: debugLineProjection,
+            viewportWidth: projection.viewportWidth,
+            viewportHeight: projection.viewportHeight
+        )
         )
     }
 
@@ -1613,8 +1711,31 @@ public struct GameAppPipeline: Sendable {
             includeChunkCenterCrosses: visualOptions.showChunkCenters,
             includeCentralChunkHighlight: visualOptions.showCentralChunkHighlight,
             includeStreamingRadiusBounds: visualOptions.showStreamingRadiusBounds,
+            includeTerrainHeightWireframe: visualOptions.showTerrainHeightWireframe,
+            terrainWireframeStride: visualOptions.terrainWireframeStride,
+            terrainHeightScale: visualOptions.terrainHeightScale,
             boundaryColor: .debugChunkBoundary
         )
+    }
+
+    private static func debugLineProjection(
+        baseProjection: MetalDebugLineProjection,
+        visualOptions: DebugVisualOptions
+    ) -> MetalDebugLineProjection {
+        MetalDebugLineProjection(
+            centerX: baseProjection.centerX,
+            centerZ: baseProjection.centerZ,
+            halfExtentX: baseProjection.halfExtentX,
+            halfExtentZ: baseProjection.halfExtentZ,
+            heightShearX: visualOptions.showTerrainHeightWireframe ? visualOptions.terrainHeightProjectionShearX : 0,
+            heightShearZ: visualOptions.showTerrainHeightWireframe ? visualOptions.terrainHeightProjectionShearZ : 0
+        )
+    }
+
+    private static func terrainDebugLineCount(in snapshot: RenderSnapshot) -> Int {
+        snapshot.debugLines.reduce(0) { partialResult, line in
+            partialResult + (line.color == .debugTerrainWireframe ? 1 : 0)
+        }
     }
 
     private static func drawableDescriptor(
@@ -1791,6 +1912,7 @@ public enum GameAppRuntime {
             lines.append("final runtime hash: \(finalFrame.runtimeHash)")
             lines.append("final render hash: \(finalFrame.renderSnapshotHash)")
             lines.append("debug lines: \(finalFrame.preparedDebugLineCount)")
+            lines.append("terrain debug lines: \(finalFrame.terrainDebugLineCount)")
             lines.append("debug line vertices: \(finalFrame.preparedDebugLineVertexCount)")
             lines.append("debug visual layers: \(finalFrame.debugVisualOptions.enabledLayerNames.joined(separator: ","))")
             lines.append("debug camera center: \(finalFrame.debugCameraState.centerX), \(finalFrame.debugCameraState.centerZ)")
@@ -1803,7 +1925,7 @@ public enum GameAppRuntime {
         if verbose {
             for frame in result.frames {
                 lines.append(
-                    "tick \(frame.tick.rawValue): runtime \(frame.runtimeHash), render \(frame.renderSnapshotHash), debug lines \(frame.preparedDebugLineCount), camera center \(frame.debugCameraState.centerX),\(frame.debugCameraState.centerZ), halfZ \(frame.debugCameraState.halfExtentZ)"
+                    "tick \(frame.tick.rawValue): runtime \(frame.runtimeHash), render \(frame.renderSnapshotHash), debug lines \(frame.preparedDebugLineCount), terrain debug lines \(frame.terrainDebugLineCount), camera center \(frame.debugCameraState.centerX),\(frame.debugCameraState.centerZ), halfZ \(frame.debugCameraState.halfExtentZ)"
                 )
             }
         }

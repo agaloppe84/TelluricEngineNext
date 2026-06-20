@@ -51,12 +51,112 @@ final class RuntimeRenderExtractionTests: XCTestCase {
         XCTAssertFalse(config.includeChunkCenterCrosses)
         XCTAssertTrue(config.includeCentralChunkHighlight)
         XCTAssertTrue(config.includeStreamingRadiusBounds)
+        XCTAssertFalse(config.includeTerrainHeightWireframe)
         XCTAssertEqual(result.renderSnapshot.debugLines.count, 48)
         XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugXAxis })
         XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugZAxis })
         XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugOrigin })
         XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugCentralChunk })
         XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugStreamingRadius })
+    }
+
+    func testTerrainWireframeExtractionProducesDeterministicDebugLines() {
+        let snapshot = runtimeSnapshot(radius: 1)
+        let config = terrainOnlyConfig(stride: 4)
+
+        let first = RuntimeRenderExtractor().extract(from: snapshot, config: config)
+        let second = RuntimeRenderExtractor().extract(from: snapshot, config: config)
+
+        XCTAssertTrue(first.success)
+        XCTAssertEqual(first.renderSnapshot.debugLines.count, 360)
+        XCTAssertEqual(terrainLines(in: first).count, 360)
+        XCTAssertEqual(first.renderSnapshot, second.renderSnapshot)
+        XCTAssertEqual(first.renderSnapshot.stableHash, second.renderSnapshot.stableHash)
+        XCTAssertTrue(first.renderSnapshot.debugLines.allSatisfy { line in
+            line.start.x.isFinite
+                && line.start.y.isFinite
+                && line.start.z.isFinite
+                && line.end.x.isFinite
+                && line.end.y.isFinite
+                && line.end.z.isFinite
+        })
+    }
+
+    func testTerrainWireframeRespectsStride() {
+        let snapshot = runtimeSnapshot(radius: 0)
+        let strideFour = RuntimeRenderExtractor().extract(
+            from: snapshot,
+            config: terrainOnlyConfig(stride: 4)
+        )
+        let strideEight = RuntimeRenderExtractor().extract(
+            from: snapshot,
+            config: terrainOnlyConfig(stride: 8)
+        )
+
+        XCTAssertEqual(terrainLines(in: strideFour).count, 40)
+        XCTAssertEqual(terrainLines(in: strideEight).count, 12)
+        XCTAssertNotEqual(strideFour.renderSnapshot.stableHash, strideEight.renderSnapshot.stableHash)
+    }
+
+    func testTerrainHeightScaleIsAppliedDeterministically() {
+        let snapshot = runtimeSnapshot(radius: 0)
+        let base = RuntimeRenderExtractor().extract(
+            from: snapshot,
+            config: terrainOnlyConfig(stride: 4, heightScale: 1)
+        )
+        let doubled = RuntimeRenderExtractor().extract(
+            from: snapshot,
+            config: terrainOnlyConfig(stride: 4, heightScale: 2)
+        )
+
+        let baseMax = maxAbsY(in: terrainLines(in: base))
+        let doubledMax = maxAbsY(in: terrainLines(in: doubled))
+
+        XCTAssertGreaterThan(baseMax, 0)
+        XCTAssertEqual(doubledMax, baseMax * 2, accuracy: 0.0001)
+        XCTAssertNotEqual(base.renderSnapshot.stableHash, doubled.renderSnapshot.stableHash)
+    }
+
+    func testTerrainWireframeSharedBoundarySamplesAlign() {
+        let result = RuntimeRenderExtractor().extract(
+            from: runtimeSnapshot(radius: 1),
+            config: terrainOnlyConfig(stride: 4)
+        )
+        let terrain = terrainLines(in: result)
+        let points = terrain.flatMap { line in
+            [line.start, line.end]
+        }
+        let sharedOriginYs = points.filter { point in
+            point.x == 0 && point.z == 0
+        }.map(\.y)
+
+        XCTAssertTrue(result.success)
+        XCTAssertGreaterThanOrEqual(sharedOriginYs.count, 2)
+        for y in sharedOriginYs {
+            XCTAssertEqual(y, sharedOriginYs[0], accuracy: 0.0001)
+        }
+    }
+
+    func testInvalidTerrainWireframeStrideReportsDiagnostic() {
+        let result = RuntimeRenderExtractor().extract(
+            from: runtimeSnapshot(radius: 0),
+            config: RuntimeRenderExtractionConfig(
+                camera: makeCamera(),
+                includeChunkBoundaryLines: false,
+                includeWorldAxes: false,
+                includeOriginMarker: false,
+                includeCentralChunkHighlight: false,
+                includeStreamingRadiusBounds: false,
+                includeTerrainHeightWireframe: true,
+                terrainWireframeStride: 0
+            )
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertTrue(result.diagnostics.messages.contains {
+            $0.code == NamespaceID("render_extraction.config.invalid_terrain_wireframe_stride")
+        })
+        XCTAssertEqual(result.renderSnapshot.debugLines.count, 0)
     }
 
     func testTogglingAxesChangesRenderSnapshotHashAndLineCount() {
@@ -151,6 +251,7 @@ final class RuntimeRenderExtractionTests: XCTestCase {
         XCTAssertEqual(RenderColor.debugOrigin, RenderColor(red: 1.0, green: 0.92, blue: 0.20, alpha: 1))
         XCTAssertEqual(RenderColor.debugCentralChunk, RenderColor(red: 0.30, green: 1.0, blue: 0.44, alpha: 1))
         XCTAssertEqual(RenderColor.debugStreamingRadius, RenderColor(red: 0.74, green: 0.48, blue: 1.0, alpha: 1))
+        XCTAssertEqual(RenderColor.debugTerrainWireframe, RenderColor(red: 0.10, green: 0.86, blue: 0.78, alpha: 0.92))
     }
 
     func testSameRuntimeSnapshotProducesSameRenderSnapshotHash() {
@@ -350,6 +451,31 @@ final class RuntimeRenderExtractionTests: XCTestCase {
             includeStreamingRadiusBounds: false,
             boundaryColor: .white
         )
+    }
+
+    private func terrainOnlyConfig(stride: Int, heightScale: Float = 1) -> RuntimeRenderExtractionConfig {
+        RuntimeRenderExtractionConfig(
+            camera: makeCamera(),
+            includeChunkBoundaryLines: false,
+            includeWorldAxes: false,
+            includeOriginMarker: false,
+            includeChunkCenterCrosses: false,
+            includeCentralChunkHighlight: false,
+            includeStreamingRadiusBounds: false,
+            includeTerrainHeightWireframe: true,
+            terrainWireframeStride: stride,
+            terrainHeightScale: heightScale
+        )
+    }
+
+    private func terrainLines(in result: RuntimeRenderExtractionResult) -> [DebugLine] {
+        result.renderSnapshot.debugLines.filter { $0.color == .debugTerrainWireframe }
+    }
+
+    private func maxAbsY(in lines: [DebugLine]) -> Float {
+        lines.flatMap { [$0.start.y, $0.end.y] }.reduce(0) { partialResult, y in
+            Swift.max(partialResult, abs(y))
+        }
     }
 
     private func makeCamera() -> CameraSnapshot {

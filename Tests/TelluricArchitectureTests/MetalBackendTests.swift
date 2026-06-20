@@ -36,6 +36,21 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertEqual(try roundTrip(descriptor), descriptor)
     }
 
+    func testDebugLineProjectionHeightShearRoundTripsThroughCodable() throws {
+        let projection = MetalDebugLineProjection(
+            centerX: 2,
+            centerZ: 3,
+            halfExtentX: 16,
+            halfExtentZ: 12,
+            heightShearX: 0.12,
+            heightShearZ: 0.35
+        )
+
+        XCTAssertEqual(try roundTrip(projection), projection)
+        XCTAssertEqual(projection.heightShearX, 0.12)
+        XCTAssertEqual(projection.heightShearZ, 0.35)
+    }
+
     func testBackendReportsUnavailableGracefullyIfNoDeviceExists() {
         let backend = MetalRenderBackend()
 
@@ -200,6 +215,8 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertFalse(contents.contains("float4 fragment ="))
         XCTAssertTrue(contents.contains("TelluricDebugLineVertex debugVertex ="))
         XCTAssertTrue(contents.contains("debugVertex.positionX"))
+        XCTAssertTrue(contents.contains("debugVertex.positionY * uniforms.heightShearX"))
+        XCTAssertTrue(contents.contains("debugVertex.positionY * uniforms.heightShearZ"))
         XCTAssertTrue(contents.contains("debugVertex.red"))
     }
 

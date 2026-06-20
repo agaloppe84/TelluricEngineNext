@@ -140,7 +140,7 @@ public struct MetalDrawableClearColor: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// Debug-only top-down projection for drawing world-space chunk lines.
+/// Debug-only projection for drawing world-space debug lines.
 public struct MetalDebugLineProjection: Codable, Equatable, Hashable, Sendable {
     /// World x coordinate mapped to clip-space center.
     public let centerX: Float
@@ -154,16 +154,33 @@ public struct MetalDebugLineProjection: Codable, Equatable, Hashable, Sendable {
     /// Positive world z half extent mapped to clip-space y `-1...1`.
     public let halfExtentZ: Float
 
-    /// Creates a debug top-down projection.
-    public init(centerX: Float, centerZ: Float, halfExtentX: Float, halfExtentZ: Float) {
+    /// World y contribution to projected x. Zero keeps a pure top-down projection.
+    public let heightShearX: Float
+
+    /// World y contribution to projected z. Zero keeps a pure top-down projection.
+    public let heightShearZ: Float
+
+    /// Creates a debug projection. Height shears are debug-only and do not represent a gameplay camera.
+    public init(
+        centerX: Float,
+        centerZ: Float,
+        halfExtentX: Float,
+        halfExtentZ: Float,
+        heightShearX: Float = 0,
+        heightShearZ: Float = 0
+    ) {
         precondition(centerX.isFinite, "centerX must be finite")
         precondition(centerZ.isFinite, "centerZ must be finite")
         precondition(halfExtentX.isFinite && halfExtentX > 0, "halfExtentX must be finite and positive")
         precondition(halfExtentZ.isFinite && halfExtentZ > 0, "halfExtentZ must be finite and positive")
+        precondition(heightShearX.isFinite, "heightShearX must be finite")
+        precondition(heightShearZ.isFinite, "heightShearZ must be finite")
         self.centerX = centerX
         self.centerZ = centerZ
         self.halfExtentX = halfExtentX
         self.halfExtentZ = halfExtentZ
+        self.heightShearX = heightShearX
+        self.heightShearZ = heightShearZ
     }
 }
 
@@ -811,6 +828,8 @@ public struct MetalDebugLineRenderPipeline: @unchecked Sendable {
         float centerZ;
         float halfExtentX;
         float halfExtentZ;
+        float heightShearX;
+        float heightShearZ;
     };
 
     struct TelluricDebugLineOutput {
@@ -824,8 +843,10 @@ public struct MetalDebugLineRenderPipeline: @unchecked Sendable {
         uint vertexID [[vertex_id]]
     ) {
         TelluricDebugLineVertex debugVertex = vertices[vertexID];
-        float clipX = (debugVertex.positionX - uniforms.centerX) / uniforms.halfExtentX;
-        float clipY = (debugVertex.positionZ - uniforms.centerZ) / uniforms.halfExtentZ;
+        float projectedX = (debugVertex.positionX - uniforms.centerX) + debugVertex.positionY * uniforms.heightShearX;
+        float projectedZ = (debugVertex.positionZ - uniforms.centerZ) + debugVertex.positionY * uniforms.heightShearZ;
+        float clipX = projectedX / uniforms.halfExtentX;
+        float clipY = projectedZ / uniforms.halfExtentZ;
 
         TelluricDebugLineOutput lineOutput;
         lineOutput.position = float4(clipX, clipY, 0.0, 1.0);
@@ -855,12 +876,16 @@ fileprivate struct PackedMetalDebugLineUniforms {
     let centerZ: Float
     let halfExtentX: Float
     let halfExtentZ: Float
+    let heightShearX: Float
+    let heightShearZ: Float
 
     init(projection: MetalDebugLineProjection) {
         self.centerX = projection.centerX
         self.centerZ = projection.centerZ
         self.halfExtentX = projection.halfExtentX
         self.halfExtentZ = projection.halfExtentZ
+        self.heightShearX = projection.heightShearX
+        self.heightShearZ = projection.heightShearZ
     }
 }
 

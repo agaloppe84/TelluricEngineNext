@@ -216,6 +216,8 @@ Phase 20 adds debug camera/projection controls. `TelluricGameAppCore` owns UI-fr
 
 Phase 21 adds debug visual polish. `TelluricRenderExtraction` emits line-based axes, origin marker, central chunk highlight, optional center crosses, and streaming footprint outlines. `TelluricGameAppCore` owns visual layer toggles and logging options, while `TelluricGameApp` owns only keyboard glue. This remains debug visualization, not terrain rendering or gameplay.
 
+Phase 22 adds terrain height debug preview. `TelluricRenderExtraction` can regenerate deterministic terrain payloads for resident chunks and emit sparse height wireframes as backend-neutral `DebugLine` values. `TelluricRenderMetal` still draws only debug lines; no terrain mesh, material, texture, asset, gameplay, or editor system is introduced.
+
 ### Audio
 
 ```text
@@ -361,8 +363,9 @@ Procedural systems testable before rendering
 19. ReplayInspector behavior
 20. Debug camera / projection controls
 21. Debug visual polish
-22. WorldLab
-23. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+22. Terrain height debug preview using backend-neutral debug lines
+23. WorldLab
+24. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

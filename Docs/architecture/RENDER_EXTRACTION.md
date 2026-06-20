@@ -15,11 +15,14 @@ TelluricMath
 TelluricRender
 TelluricRuntime
 TelluricWorld
+TelluricTerrain
 ```
 
 `TelluricRuntime` does not import `TelluricRender`, and `TelluricRender` does not import `TelluricRuntime`. The bridge sits above both contracts so future apps, CLI tools, and debug systems can request render snapshots without reversing either boundary.
 
 Lower engine modules must not import `TelluricRenderExtraction`.
+
+`TelluricTerrain` is an allowed extraction dependency as of Phase 22. Runtime snapshots currently store aggregate chunk payload hashes rather than full terrain payloads, so terrain debug preview regenerates the same deterministic terrain payload for each resident chunk from the snapshot's world config, engine version, runtime terrain settings, and chunk coordinate. This keeps runtime snapshots compact and keeps Metal free of terrain contracts.
 
 ## Extraction Model
 
@@ -62,6 +65,23 @@ The default visual layer set uses deterministic backend-neutral colors from `Tel
 
 A radius 1 / chunk size 16 resident grid now produces 48 default debug lines: 36 chunk-boundary lines, 2 axis lines, 2 origin-marker lines, 4 central chunk accent lines, and 4 streaming-footprint lines. Optional chunk center crosses add 2 lines per resident chunk.
 
+## Terrain Height Debug Preview
+
+Phase 22 adds an optional sparse terrain height preview. Extraction uses the existing deterministic `DeterministicTerrainGenerator` and emits line-only terrain wireframes from `(chunkSize + 1) x (chunkSize + 1)` heightfields. The positive boundary sample row/column is included, so neighboring chunks share aligned edge samples.
+
+The terrain preview:
+
+- connects sampled heightfield points in local X and Z directions;
+- uses world-space X/Z offsets from integer `ChunkCoord` and `WorldConfig.chunkSize`;
+- stores scaled terrain height in the debug line Y coordinate;
+- uses a configurable positive sample stride, defaulting to 4 for the app shell;
+- emits deterministic `RenderColor.debugTerrainWireframe` lines;
+- validates stride, height scale, base Y, finite generated heights, and expected dimensions.
+
+This is not terrain mesh rendering. It does not create triangles, normals, materials, textures, GPU terrain buffers, collision, physics, lighting, biome materials, or asset loading.
+
+For a radius 1 / chunk size 16 app-shell run with stride 4, terrain preview adds 360 terrain wireframe lines. With the polished 48-line grid enabled, the expected default app-shell line count is 408 debug lines.
+
 Negative chunk coordinates use the same integer chunk coordinate assumptions as streaming and world contracts. Extreme coordinates that overflow integer footprint calculation are reported as diagnostics.
 
 ## Deterministic Ordering
@@ -71,6 +91,8 @@ Extraction iterates resident chunk records in deterministic chunk-coordinate ord
 The extraction path must not depend on dictionary or set iteration order, system randomness, wall-clock time, or Swift's built-in `Hasher`.
 
 Layer toggles alter the ordered debug primitive set and therefore intentionally alter the render snapshot hash. This is useful for deterministic visual debugging and report comparison.
+
+Terrain-preview toggles and stride/height-scale options also alter the ordered debug line set and render snapshot hash by design.
 
 ## Camera Boundary
 
@@ -108,7 +130,6 @@ Phase 9 does not implement:
 - app/window/view code;
 - render loop orchestration;
 - terrain mesh generation;
-- terrain height visualization;
 - asset loading;
 - gameplay cameras;
 - tools UI;

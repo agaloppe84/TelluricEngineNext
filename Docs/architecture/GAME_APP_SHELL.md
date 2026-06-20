@@ -5,6 +5,7 @@ Phase 17 adds the first drawable debug-line render pass.
 Phase 18 hardens the local app run and visual smoke workflow.
 Phase 20 adds debug-only camera and projection controls for viewing the chunk grid.
 Phase 21 adds debug visual polish layers and quieter app-run logging.
+Phase 22 adds deterministic terrain height debug preview using backend-neutral debug lines.
 
 This is a SwiftPM executable host, not a traditional Xcode project or packaged app bundle. It exists to prove that the existing engine/game/runtime/render-extraction/Metal-preparation pipeline can be hosted visually without moving engine behavior into UI code.
 
@@ -50,10 +51,10 @@ The app shell can:
 - extract a backend-neutral `RenderSnapshot`;
 - pass that snapshot to `TelluricRenderMetal`;
 - prepare debug line vertex data through the Metal backend;
-- render debug chunk boundary lines into the current drawable when Metal and a drawable are available;
+- render debug chunk boundary and terrain wireframe lines into the current drawable when Metal and a drawable are available;
 - log structured frame diagnostics.
 
-The app currently shows a clear background plus flat chunk boundary debug lines. Those lines come from `RuntimeRenderExtractor` and are drawn through a debug-only top-down projection. They are not terrain meshes.
+The app currently shows a clear background plus debug grid lines and optional terrain height wireframe lines. Those lines come from `RuntimeRenderExtractor` and are drawn through a debug-only projection. They are not terrain meshes.
 
 When Metal and a drawable are available, the app submits those debug lines through `TelluricRenderMetal` and reports attempted/succeeded draw calls. When Metal is unavailable, the app reports that state clearly and the no-window smoke path remains valid.
 
@@ -68,6 +69,7 @@ The app-shell default debug view enables:
 - world origin marker;
 - central chunk highlight for chunk `(0, 0)`;
 - current streaming footprint outline.
+- deterministic terrain height wireframe preview.
 
 Optional chunk center crosses are available but disabled by default to keep the radius 1 view readable.
 
@@ -80,8 +82,11 @@ Default colors are deterministic backend-neutral `RenderColor` values:
 - central chunk: green accent;
 - streaming bounds: purple accent;
 - optional chunk centers: pale blue.
+- terrain wireframe: cyan/teal.
 
-For a radius 1 / chunk size 16 run, the default line set increases from the earlier 36 chunk-boundary lines to 48 total debug lines.
+For a radius 1 / chunk size 16 run without terrain preview, the polished line set is 48 total debug lines. With the default app-shell terrain preview enabled at stride 4, the app extracts 408 total debug lines: 48 polished grid lines plus 360 terrain wireframe lines.
+
+The terrain preview samples each resident chunk's deterministic heightfield, connects samples in X/Z directions, stores height in the debug line Y coordinate, and uses a small debug projection height shear so relief is visible. It remains a debug wireframe, not production terrain rendering.
 
 ## Debug Camera
 
@@ -117,6 +122,7 @@ Current controls:
 - `C`: toggle chunk center crosses;
 - `H`: toggle central chunk highlight;
 - `B`: toggle streaming radius bounds;
+- `T`: toggle terrain height wireframe;
 - `V`: toggle verbose frame logging;
 - mouse wheel: zoom.
 
@@ -138,6 +144,7 @@ To open the minimal window from a local macOS shell:
 ./scripts/game-app-safe.sh --run --diagnostics-report Tools/benchmarks/game_app_visual_report.json
 ./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_camera_report.json
 ./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_visual_polish_report.json
+./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --show-terrain --terrain-stride 4 --terrain-height-scale 1.0 --diagnostics-report Tools/benchmarks/game_app_terrain_debug_report.json
 ```
 
 The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under `.build/`. Raw `swift run` can use user-level SwiftPM cache and configuration paths, so wrappers are preferred for Codex and validation work.
@@ -157,6 +164,7 @@ The report contains:
 - Metal availability and command queue capability;
 - `MTKView` and drawable availability when known;
 - final debug line and vertex counts;
+- final terrain debug line count;
 - final drawn debug line and vertex counts;
 - enabled debug visual layers;
 - attempted and successful draw call counts;
@@ -188,3 +196,5 @@ Phase 17 adds drawable debug-line rendering only. It still does not implement te
 Phase 20 adds debug camera controls only. It still does not implement a gameplay camera, player input, terrain mesh rendering, asset rendering, editor UI, or a full input system.
 
 Phase 21 adds debug visual polish only. It still does not implement terrain meshes, material or texture rendering, GPU text labels, editor UI, gameplay controls, or asset rendering.
+
+Phase 22 adds terrain height debug preview only. It still does not implement final terrain mesh rendering, triangle rendering, normals, lighting, shadows, material or texture rendering, biome material rendering, asset loading, editor UI, gameplay controls, physics, audio, motion, or ML.

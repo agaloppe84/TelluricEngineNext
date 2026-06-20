@@ -75,21 +75,22 @@ The app shell is a thin SwiftPM executable host over the existing validated pipe
 ./scripts/game-app-safe.sh --run --diagnostics-report Tools/benchmarks/game_app_visual_report.json
 ```
 
-The dry run and smoke paths exercise the app-shell pipeline without opening a window. `--run` opens a minimal macOS window and `MTKView` when Metal is available. The current drawable pass clears the view and draws extracted debug grid lines; it does not render terrain meshes, materials, textures, assets, or gameplay.
+The dry run and smoke paths exercise the app-shell pipeline without opening a window. `--run` opens a minimal macOS window and `MTKView` when Metal is available. The current drawable pass clears the view and draws extracted debug grid lines plus an optional terrain height wireframe preview; it does not render final terrain meshes, materials, textures, assets, or gameplay.
 
 The app shell includes debug-only projection controls for viewing the chunk grid. `+`/`=` zooms in, `-` zooms out, arrow keys or `W`/`A`/`S`/`D` pan, `0` or `R` refocuses the grid, and mouse wheel zooms. These controls affect only debug visualization, not game/runtime state.
 
-Visual layer toggles are also debug-only: `G` toggles chunk boundaries, `X` toggles axes, `O` toggles the origin marker, `C` toggles chunk center crosses, `H` toggles the central chunk highlight, `B` toggles streaming bounds, and `V` toggles verbose frame logging.
+Visual layer toggles are also debug-only: `G` toggles chunk boundaries, `X` toggles axes, `O` toggles the origin marker, `C` toggles chunk center crosses, `H` toggles the central chunk highlight, `B` toggles streaming bounds, `T` toggles terrain height wireframe, and `V` toggles verbose frame logging.
 
 For a bounded visual check with diagnostics:
 
 ```sh
 ./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_camera_report.json
 ./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_visual_polish_report.json
+./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --show-terrain --terrain-stride 4 --terrain-height-scale 1.0 --diagnostics-report Tools/benchmarks/game_app_terrain_debug_report.json
 ```
 
-With Metal and a drawable available, the radius 1 chunk grid should be centered and scaled in the window. The default polished debug view draws chunk boundaries, X/Z axes, the world origin marker, the central chunk highlight, and the streaming radius outline. Debug line draw calls should succeed with no diagnostics errors.
+With Metal and a drawable available, the radius 1 chunk grid should be centered and scaled in the window. The default polished debug view draws chunk boundaries, X/Z axes, the world origin marker, the central chunk highlight, the streaming radius outline, and a cyan/teal terrain height wireframe. Debug line draw calls should succeed with no diagnostics errors. For radius 1 / chunk size 16 / terrain stride 4, expect 408 prepared/drawn debug lines.
 
-Run logging can be adjusted with `--quiet`, `--verbose`, and `--log-every <N>`. Visual layers can also be disabled at launch with `--hide-grid`, `--hide-axes`, `--hide-origin`, `--hide-central-highlight`, `--hide-radius-bounds`, or enabled with `--show-centers`.
+Run logging can be adjusted with `--quiet`, `--verbose`, and `--log-every <N>`. Visual layers can also be disabled at launch with `--hide-grid`, `--hide-axes`, `--hide-origin`, `--hide-central-highlight`, `--hide-radius-bounds`, `--hide-terrain`, or enabled with `--show-centers` and `--show-terrain`. Terrain preview density can be adjusted with `--terrain-stride <N>` and height exaggeration with `--terrain-height-scale <Float>`.
 
 Use the safe wrapper because it keeps SwiftPM scratch, cache, config, home, and module-cache paths under this repository. `./scripts/game-app-safe.sh --script-help` prints wrapper examples without launching the app.

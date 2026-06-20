@@ -57,6 +57,8 @@ Phase 20 adds debug camera/projection control in the app-shell layer. `TelluricR
 
 Phase 21 adds fixed debug visualization colors in `RenderColor` for chunk boundaries, axes, origin marker, central chunk highlight, streaming bounds, and optional chunk centers. These are backend-neutral color constants, not materials or assets.
 
+Phase 22 adds `RenderColor.debugTerrainWireframe` for line-based terrain height debug preview. This is still a debug primitive color, not a material or asset reference.
+
 Future Metal backend phases may translate resource identifiers into backend resources and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
 
 ## Render Snapshot
@@ -103,6 +105,8 @@ Runtime render extraction uses these primitives for flat chunk footprint visuali
 
 The polished debug grid remains line-based. World axes, origin marker, central chunk highlight, streaming bounds, and optional center crosses are all represented as `DebugLine` values so they work with the current Metal debug line pipeline.
 
+Terrain height preview is also line-based. Runtime render extraction emits sparse `DebugLine` wireframes from deterministic heightfield samples. Those lines are renderer-independent debug contracts, not terrain meshes.
+
 ## Render Hashing
 
 Render snapshots use:
@@ -127,7 +131,7 @@ The backend skeleton currently supports:
 - deterministic frame results;
 - explicit unsupported diagnostics for renderable instances, texture/material binding, debug points, and debug labels.
 
-Debug line drawing is still a debug visualization path only. It uses a simple backend-owned top-down orthographic projection for chunk footprint lines. There is still no terrain mesh rendering, material system, texture loading, asset rendering, gameplay camera, or render graph.
+Debug line drawing is still a debug visualization path only. It uses a backend-owned debug projection for chunk footprint and terrain preview lines. The app can enable a small height shear so terrain Y values are visible, but there is still no terrain mesh rendering, material system, texture loading, asset rendering, gameplay camera, or render graph.
 
 Phase 20 makes that top-down projection controllable from the app shell: the default view fits the generated chunk grid, viewport aspect is accounted for, zoom and pan adjust only debug visualization state, and reset refocuses the grid.
 

@@ -221,7 +221,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
              .toggleOriginMarker,
              .toggleChunkCenters,
              .toggleCentralChunkHighlight,
-             .toggleStreamingRadiusBounds:
+             .toggleStreamingRadiusBounds,
+             .toggleTerrainHeightWireframe:
             print(
                 "telluric-game-app debug layers: "
                     + pipeline.debugVisualLayers.enabledLayerNames.joined(separator: ",")
@@ -267,6 +268,7 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
             "telluric-game-app final: "
                 + "frames \(frameSummaries.count), "
                 + "debug lines \(finalFrame.debugLinesExtracted), "
+                + "terrain debug lines \(finalFrame.terrainDebugLinesExtracted), "
                 + "drawn debug lines \(finalFrame.drawnDebugLines), "
                 + "drawable success \(finalFrame.drawCallSucceeded), "
                 + "layers \(finalFrame.debugVisualLayersEnabled.joined(separator: ",")), "
@@ -297,6 +299,7 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                 "telluric-game-app: Metal unavailable; opened fallback view. "
                     + "frames simulated \(frameSummaries.count), "
                     + "debug lines \(finalFrame.debugLinesExtracted), "
+                    + "terrain debug lines \(finalFrame.terrainDebugLinesExtracted), "
                     + "camera center \(finalFrame.debugCameraCenterX),\(finalFrame.debugCameraCenterZ), "
                     + "halfZ \(finalFrame.debugCameraHalfExtentZ), "
                     + "diagnostics info \(finalFrame.diagnosticsSummary.infos) "
@@ -382,6 +385,7 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                 + "runtime \(frame.runtimeHash), "
                 + "render \(frame.renderSnapshotHash), "
                 + "prepared debug lines \(frame.preparedDebugLineCount), "
+                + "terrain debug lines \(frame.terrainDebugLineCount), "
                 + "drawn debug lines \(drawableResult.drawnDebugLineCount), "
                 + "presented \(drawableResult.presentedDrawable), "
                 + "drawable success \(drawableResult.success), "
@@ -463,6 +467,8 @@ private final class GameAppMetalView: MTKView {
             return .toggleCentralChunkHighlight
         case "b":
             return .toggleStreamingRadiusBounds
+        case "t":
+            return .toggleTerrainHeightWireframe
         case "a":
             return .pan(deltaX: -1, deltaZ: 0)
         case "d":

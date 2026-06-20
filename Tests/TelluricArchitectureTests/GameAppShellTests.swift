@@ -64,6 +64,9 @@ final class GameAppShellTests: XCTestCase {
             "--hide-origin",
             "--show-centers",
             "--hide-central-highlight",
+            "--hide-terrain",
+            "--terrain-stride", "8",
+            "--terrain-height-scale", "0.5",
         ])
 
         XCTAssertFalse(arguments.dryRun)
@@ -79,6 +82,9 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertFalse(arguments.debugVisualOptions.showOriginMarker)
         XCTAssertTrue(arguments.debugVisualOptions.showChunkCenters)
         XCTAssertFalse(arguments.debugVisualOptions.showCentralChunkHighlight)
+        XCTAssertFalse(arguments.debugVisualOptions.showTerrainHeightWireframe)
+        XCTAssertEqual(arguments.debugVisualOptions.terrainWireframeStride, 8)
+        XCTAssertEqual(arguments.debugVisualOptions.terrainHeightScale, 0.5)
     }
 
     func testArgumentParserRejectsInvalidFrames() {
@@ -95,6 +101,22 @@ final class GameAppShellTests: XCTestCase {
             XCTAssertEqual(
                 error as? GameAppArgumentError,
                 .invalidValue(option: "--log-every", value: "0", reason: "Expected a positive integer.")
+            )
+        }
+    }
+
+    func testArgumentParserRejectsInvalidTerrainOptions() {
+        XCTAssertThrowsError(try GameAppArgumentParser.parse(["--terrain-stride", "0"])) { error in
+            XCTAssertEqual(
+                error as? GameAppArgumentError,
+                .invalidValue(option: "--terrain-stride", value: "0", reason: "Expected a positive integer.")
+            )
+        }
+
+        XCTAssertThrowsError(try GameAppArgumentParser.parse(["--terrain-height-scale", "0"])) { error in
+            XCTAssertEqual(
+                error as? GameAppArgumentError,
+                .invalidValue(option: "--terrain-height-scale", value: "0", reason: "Expected a finite positive number.")
             )
         }
     }
@@ -124,12 +146,18 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertFalse(options.showChunkCenters)
         XCTAssertTrue(options.showCentralChunkHighlight)
         XCTAssertTrue(options.showStreamingRadiusBounds)
+        XCTAssertTrue(options.showTerrainHeightWireframe)
+        XCTAssertEqual(options.terrainWireframeStride, 4)
+        XCTAssertEqual(options.terrainHeightScale, 1)
+        XCTAssertEqual(options.terrainHeightProjectionShearX, 0.12)
+        XCTAssertEqual(options.terrainHeightProjectionShearZ, 0.35)
         XCTAssertEqual(options.enabledLayerNames, [
             "chunkBoundaries",
             "worldAxes",
             "originMarker",
             "centralChunkHighlight",
             "streamingRadiusBounds",
+            "terrainHeightWireframe",
         ])
         XCTAssertEqual(try roundTrip(options), options)
     }
@@ -211,8 +239,9 @@ final class GameAppShellTests: XCTestCase {
         let result = pipeline.step()
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(result.preparedDebugLineCount, 16)
-        XCTAssertEqual(result.preparedDebugLineVertexCount, 32)
+        XCTAssertEqual(result.preparedDebugLineCount, 56)
+        XCTAssertEqual(result.preparedDebugLineVertexCount, 112)
+        XCTAssertEqual(result.terrainDebugLineCount, 40)
         XCTAssertFalse(result.drawableRenderingImplemented)
         XCTAssertEqual(result.diagnosticsSummary.errors, 0)
         XCTAssertEqual(result.debugVisualOptions, .default)
@@ -228,13 +257,16 @@ final class GameAppShellTests: XCTestCase {
 
         let frame = pipeline.stepForRendering()
 
-        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 16)
-        XCTAssertEqual(frame.renderSnapshot.debugLines.count, 16)
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 56)
+        XCTAssertEqual(frame.frameResult.terrainDebugLineCount, 40)
+        XCTAssertEqual(frame.renderSnapshot.debugLines.count, 56)
         XCTAssertEqual(frame.drawableDescriptor.frameIndex, frame.frameResult.runtimeFrameIndex)
         XCTAssertEqual(frame.drawableDescriptor.viewportWidth, 1280)
         XCTAssertEqual(frame.drawableDescriptor.viewportHeight, 720)
         XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentX, 0)
         XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentZ, 0)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearX, 0.12)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearZ, 0.35)
         XCTAssertEqual(frame.frameResult.debugCameraState.centerX, 8, accuracy: 0.0001)
         XCTAssertEqual(frame.frameResult.debugCameraState.centerZ, 8, accuracy: 0.0001)
     }
@@ -291,7 +323,29 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertFalse(diagnostics.hasErrors)
         XCTAssertEqual(beforeHash, afterHash)
         XCTAssertFalse(pipeline.debugVisualLayers.showWorldAxes)
-        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 46)
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 406)
+    }
+
+    func testAppShellTerrainToggleDoesNotMutateRuntimeStateDirectly() throws {
+        var pipeline = try GameAppPipeline(config: GameAppConfig(
+            seed: 1,
+            radius: 1,
+            chunkSize: 16,
+            verticalScale: 8
+        ))
+        let beforeHash = pipeline.snapshot().stableHash
+
+        let diagnostics = pipeline.applyDebugCameraControl(.toggleTerrainHeightWireframe)
+        let afterHash = pipeline.snapshot().stableHash
+        let frame = pipeline.stepForRendering()
+
+        XCTAssertFalse(diagnostics.hasErrors)
+        XCTAssertEqual(beforeHash, afterHash)
+        XCTAssertFalse(pipeline.debugVisualLayers.showTerrainHeightWireframe)
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 48)
+        XCTAssertEqual(frame.frameResult.terrainDebugLineCount, 0)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearX, 0)
+        XCTAssertEqual(frame.drawableDescriptor.debugLineProjection.heightShearZ, 0)
     }
 
     func testPipelineCanDisableGridButKeepAxesAndOrigin() throws {
@@ -303,7 +357,8 @@ final class GameAppShellTests: XCTestCase {
                 showOriginMarker: true,
                 showChunkCenters: false,
                 showCentralChunkHighlight: false,
-                showStreamingRadiusBounds: false
+                showStreamingRadiusBounds: false,
+                showTerrainHeightWireframe: false
             )
         )
 
@@ -327,7 +382,8 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(result.mode, .dryRun)
         XCTAssertEqual(result.framesRequested, 2)
         XCTAssertEqual(result.frames.count, 2)
-        XCTAssertEqual(result.frames.last?.preparedDebugLineCount, 48)
+        XCTAssertEqual(result.frames.last?.preparedDebugLineCount, 408)
+        XCTAssertEqual(result.frames.last?.terrainDebugLineCount, 360)
         XCTAssertEqual(result.diagnosticsSummary.errors, 0)
     }
 
@@ -360,8 +416,9 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(decoded.framesRequested, 1)
         XCTAssertEqual(decoded.framesSimulated, 1)
         XCTAssertEqual(decoded.framesRendered, 0)
-        XCTAssertEqual(decoded.debugLinesExtracted, 16)
-        XCTAssertEqual(decoded.debugVerticesPrepared, 32)
+        XCTAssertEqual(decoded.debugLinesExtracted, 56)
+        XCTAssertEqual(decoded.debugVerticesPrepared, 112)
+        XCTAssertEqual(decoded.terrainDebugLinesExtracted, 40)
         XCTAssertEqual(decoded.drawnDebugLines, 0)
         XCTAssertEqual(decoded.drawnDebugLineVertices, 0)
         XCTAssertEqual(decoded.debugVisualOptions, .default)

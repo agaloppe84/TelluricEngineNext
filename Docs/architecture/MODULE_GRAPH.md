@@ -77,7 +77,7 @@ TelluricPersistence -> TelluricCore, TelluricDeterminism, TelluricSimulation, Te
 TelluricRuntime -> TelluricCore, TelluricDeterminism, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
 TelluricGame -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricDiagnostics, TelluricECS, TelluricSimulation, TelluricStreaming, TelluricRuntime
 TelluricRender -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricAssets
-TelluricRenderExtraction -> TelluricCore, TelluricDiagnostics, TelluricMath, TelluricRender, TelluricRuntime, TelluricWorld
+TelluricRenderExtraction -> TelluricCore, TelluricDiagnostics, TelluricMath, TelluricRender, TelluricRuntime, TelluricWorld, TelluricTerrain
 TelluricRenderMetal -> TelluricCore, TelluricDiagnostics, TelluricRender
 TelluricGameAppCore -> TelluricGame, TelluricRuntime, TelluricRenderExtraction, TelluricRender, TelluricRenderMetal, engine contracts
 TelluricGameApp -> TelluricGameAppCore
@@ -105,6 +105,7 @@ Phase 9 implements `TelluricRenderExtraction` as the backend-neutral bridge from
 
 - it consumes ordered `RuntimeSnapshot` chunk residency;
 - it emits chunk boundary debug lines, optional labels, and optional points;
+- Phase 22 adds optional terrain height wireframe debug lines by regenerating deterministic terrain payloads for resident chunks from runtime config, terrain settings, and chunk coordinates;
 - it keeps `TelluricRuntime` independent from `TelluricRender`;
 - it does not import render backends, Metal, UI frameworks, gameplay, or tools UI.
 
@@ -156,6 +157,7 @@ Phase 16 implements `TelluricGameApp` as the first minimal macOS app shell:
 - Phase 18 adds bounded safe run/smoke options and JSON diagnostics reports without changing engine dependency direction;
 - Phase 20 adds debug-only camera/projection contracts in `TelluricGameAppCore` and AppKit-only keyboard/mouse event glue in `TelluricGameApp`;
 - Phase 21 adds backend-neutral debug visual layer options, fixed debug colors, app-shell toggles, and quieter frame logging;
+- Phase 22 enables debug-only terrain height wireframe preview through backend-neutral `DebugLine` extraction and app-shell terrain toggles;
 - engine modules, runtime, game, render extraction, and render contracts must not import app-shell targets.
 
 See `Docs/architecture/GAME_APP_SHELL.md`.

@@ -165,6 +165,12 @@ The contracts are also designed for future:
 
 None of those consumers are implemented in Phase 2.
 
+## Terrain Debug Preview Consumer
+
+Phase 22 adds a debug visualization consumer for the baseline terrain generator. `TelluricRenderExtraction` can regenerate deterministic terrain payloads for currently resident chunks and convert heightfield samples into sparse backend-neutral `DebugLine` wireframes. This does not change the terrain payload contract and does not add mesh generation, materials, textures, lighting, physics, or gameplay.
+
+The preview uses the existing `(chunkSize + 1) x (chunkSize + 1)` heightfield contract, including positive chunk boundary samples, so neighboring chunk edges align under the same world-space sampling rule.
+
 Phase 3 still does not implement:
 
 - streaming;
