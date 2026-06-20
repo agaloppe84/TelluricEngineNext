@@ -50,6 +50,8 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricTerrain",
             "TelluricBiomes",
             "TelluricStreaming",
+            "TelluricRuntime",
+            "TelluricRender",
         ]
         let forbiddenTokens = [
             "random(in:",

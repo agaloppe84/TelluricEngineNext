@@ -79,6 +79,7 @@ if [ -d Sources ]; then
     Sources/TelluricBiomes
     Sources/TelluricStreaming
     Sources/TelluricRuntime
+    Sources/TelluricRender
     Sources/TelluricSeedValidatorCore
   )
 

@@ -91,6 +91,14 @@ Telluric.RuntimeSnapshot.v1
 
 Runtime determinism depends on ordered observers, ordered streaming plans, ordered runtime chunk records, stable chunk payload hashes, fixed simulation input frames, and ordered diagnostics. The same `RuntimeConfig` plus the same ordered runtime step inputs must produce the same runtime hashes. Runtime snapshots exclude wall-clock time, process-local values, app lifecycle state, rendering resources, and unordered collection traversal.
 
+Phase 8 render snapshots add:
+
+```text
+Telluric.RenderSnapshot.v1
+```
+
+Render determinism depends on ordered camera, resource ID, renderable instance, and debug primitive data. Render snapshots are backend-neutral and exclude GPU resources, command buffers, pipeline state, platform windows, process-local values, and unordered collection traversal.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

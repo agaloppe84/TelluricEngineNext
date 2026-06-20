@@ -75,7 +75,7 @@ See `Docs/architecture/STREAMING.md`.
 TelluricAssets -> TelluricCore, TelluricDiagnostics
 TelluricPersistence -> TelluricCore, TelluricDeterminism, TelluricSimulation, TelluricWorld, TelluricDiagnostics
 TelluricRuntime -> TelluricCore, TelluricDeterminism, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
-TelluricRender -> TelluricCore, TelluricMath, TelluricAssets
+TelluricRender -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricAssets
 ```
 
 `TelluricRender` is backend-independent. It must not import Metal or MetalKit.
@@ -87,6 +87,14 @@ Phase 7 implements `TelluricRuntime` as the synchronous engine runtime shell:
 - it remains app-free, gameplay-free, UI-free, renderer-free, and synchronous.
 
 See `Docs/architecture/RUNTIME.md`.
+
+Phase 8 implements `TelluricRender` as the renderer-independent contract layer:
+
+- it owns resource identifiers, render layers, camera snapshots, renderable instances, debug primitives, render snapshots, and render snapshot hashing;
+- it depends on `TelluricDeterminism` only for stable hashing;
+- it does not import runtime, render backends, platform UI, Metal, gameplay, or tools UI.
+
+See `Docs/architecture/RENDERING.md`.
 
 ### Tools CLI targets
 

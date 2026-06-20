@@ -161,6 +161,8 @@ Responsibilities:
 
 World payloads must not contain GPU objects.
 
+Phase 8 implements renderer-independent render contracts in `TelluricRender`: neutral resource identifiers, camera snapshots, renderable instances, debug primitives, ordered render snapshots and stable render snapshot hashing.
+
 `TelluricRenderMetal` is the future Metal/MetalKit backend. It owns RenderGraph, pipelines, GPU resources and IVDS rendering when introduced, and is intentionally not created in Phase 0.
 
 ### Audio

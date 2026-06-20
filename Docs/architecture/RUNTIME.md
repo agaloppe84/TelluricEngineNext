@@ -10,6 +10,8 @@ The runtime is the engine shell. It coordinates existing engine systems, but it 
 
 Future apps will call into the runtime and provide engine-level inputs such as streaming observers and simulation input frames. The runtime returns deterministic snapshots and diagnostics that apps, tools, replay inspectors, and future render contracts can consume.
 
+Phase 8 adds renderer-independent `RenderSnapshot` contracts in `TelluricRender`. Runtime still does not import render contracts or build render snapshots; a future extraction layer can translate runtime/world/simulation state into render snapshots without reversing dependencies.
+
 ## Runtime vs Gameplay
 
 Runtime code must not know about:
