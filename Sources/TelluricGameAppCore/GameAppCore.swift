@@ -86,6 +86,9 @@ public struct GameAppArguments: Equatable, Sendable {
     /// Runs the engine pipeline without opening a window.
     public let dryRun: Bool
 
+    /// Runs a one-frame no-window smoke path.
+    public let smoke: Bool
+
     /// Number of deterministic ticks to execute in dry-run mode.
     public let dryRunTicks: Int
 
@@ -99,12 +102,14 @@ public struct GameAppArguments: Equatable, Sendable {
     public init(
         config: GameAppConfig = .default,
         dryRun: Bool = false,
+        smoke: Bool = false,
         dryRunTicks: Int = 1,
         verbose: Bool = false,
         help: Bool = false
     ) {
         self.config = config
         self.dryRun = dryRun
+        self.smoke = smoke
         self.dryRunTicks = dryRunTicks
         self.verbose = verbose
         self.help = help
@@ -135,6 +140,7 @@ public enum GameAppArgumentParser {
     public static func parse(_ arguments: [String]) throws -> GameAppArguments {
         var config = GameAppConfig.default
         var dryRun = false
+        var smoke = false
         var dryRunTicks = 1
         var verbose = false
         var help = false
@@ -150,6 +156,12 @@ public enum GameAppArgumentParser {
 
             case "--dry-run":
                 dryRun = true
+                index += 1
+
+            case "--smoke":
+                dryRun = true
+                smoke = true
+                dryRunTicks = 1
                 index += 1
 
             case "--verbose":
@@ -231,9 +243,14 @@ public enum GameAppArgumentParser {
             }
         }
 
+        if smoke {
+            dryRunTicks = 1
+        }
+
         return GameAppArguments(
             config: config,
             dryRun: dryRun,
+            smoke: smoke,
             dryRunTicks: dryRunTicks,
             verbose: verbose,
             help: help
@@ -254,7 +271,7 @@ public enum GameAppArgumentParser {
 public enum GameAppHelp {
     public static let text = """
     Usage:
-      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--dry-run] [--ticks <Int>] [--verbose]
+      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--dry-run|--smoke] [--ticks <Int>] [--verbose]
 
     Options:
       --seed <UInt64>           Root deterministic world seed. Defaults to 1.
@@ -262,6 +279,7 @@ public enum GameAppHelp {
       --chunk-size <Int>       Positive chunk cell size. Defaults to 16.
       --vertical-scale <Float> Finite positive vertical terrain scale. Defaults to 8.
       --dry-run                Run the pipeline without opening a window.
+      --smoke                  Run one no-window smoke frame.
       --ticks <Int>            Positive dry-run tick count. Defaults to 1.
       --verbose                Print ordered frame hashes.
       --help, -h               Show this help text.
@@ -283,6 +301,8 @@ public struct GameAppMetalSummary: Codable, Equatable, Sendable {
     public let isMetalAvailable: Bool
     public let hasCommandQueue: Bool
     public let deviceName: String?
+    public let supportsDrawablePresentation: Bool
+    public let supportsDebugLines: Bool
     public let supportsDebugLinePreparation: Bool
     public let unavailableReason: String?
 
@@ -291,6 +311,8 @@ public struct GameAppMetalSummary: Codable, Equatable, Sendable {
         self.isMetalAvailable = capabilities.isMetalAvailable
         self.hasCommandQueue = capabilities.hasCommandQueue
         self.deviceName = capabilities.deviceName
+        self.supportsDrawablePresentation = capabilities.supportsDrawablePresentation
+        self.supportsDebugLines = capabilities.supportsDebugLines
         self.supportsDebugLinePreparation = capabilities.supportsDebugLinePreparation
         self.unavailableReason = capabilities.unavailableReason
     }
@@ -374,6 +396,29 @@ public struct GameAppDryRunResult: Codable, Equatable, Sendable {
     }
 }
 
+/// App-shell frame data needed by a drawable host.
+public struct GameAppRenderableFrame: Codable, Equatable, Sendable {
+    /// Summary of the deterministic game/runtime/render-preparation step.
+    public let frameResult: GameAppFrameResult
+
+    /// Backend-neutral render snapshot to pass into a render backend.
+    public let renderSnapshot: RenderSnapshot
+
+    /// Drawable pass descriptor derived from deterministic app config and runtime frame.
+    public let drawableDescriptor: MetalDrawableFrameDescriptor
+
+    /// Creates a renderable app frame.
+    public init(
+        frameResult: GameAppFrameResult,
+        renderSnapshot: RenderSnapshot,
+        drawableDescriptor: MetalDrawableFrameDescriptor
+    ) {
+        self.frameResult = frameResult
+        self.renderSnapshot = renderSnapshot
+        self.drawableDescriptor = drawableDescriptor
+    }
+}
+
 /// Stateful bridge from app shell frames into the existing game/runtime/render pipeline.
 public struct GameAppPipeline: Sendable {
     /// App shell configuration.
@@ -407,6 +452,11 @@ public struct GameAppPipeline: Sendable {
         metalBackend.capabilities
     }
 
+    /// Metal backend owned by this app-shell pipeline.
+    public var metalRenderBackend: MetalRenderBackend {
+        metalBackend
+    }
+
     /// Current runtime snapshot before the next frame is stepped.
     public func snapshot() -> RuntimeSnapshot {
         session.snapshot()
@@ -414,6 +464,11 @@ public struct GameAppPipeline: Sendable {
 
     /// Steps one deterministic game/runtime/render-preparation frame.
     public mutating func step() -> GameAppFrameResult {
+        stepForRendering().frameResult
+    }
+
+    /// Steps one deterministic frame and returns the render snapshot for drawable hosts.
+    public mutating func stepForRendering() -> GameAppRenderableFrame {
         let tick = nextTick
         let gameStep = session.step(GameStepInput(
             gameInputFrame: Self.gameInputFrame(tick: tick, entityID: controlledEntityID)
@@ -440,7 +495,7 @@ public struct GameAppPipeline: Sendable {
 
         nextTick = nextTick.advanced(by: 1)
 
-        return GameAppFrameResult(
+        let frameResult = GameAppFrameResult(
             tick: tick,
             runtimeFrameIndex: runtimeSnapshot.state.frameIndex,
             simulationTick: runtimeSnapshot.state.simulationSnapshot.tick,
@@ -455,6 +510,15 @@ public struct GameAppPipeline: Sendable {
             diagnosticsSummary: diagnosticReport.summary,
             diagnostics: diagnostics,
             success: success
+        )
+
+        return GameAppRenderableFrame(
+            frameResult: frameResult,
+            renderSnapshot: extraction.renderSnapshot,
+            drawableDescriptor: Self.drawableDescriptor(
+                frameIndex: runtimeSnapshot.state.frameIndex,
+                config: config
+            )
         )
     }
 
@@ -593,6 +657,30 @@ public struct GameAppPipeline: Sendable {
         )
     }
 
+    private static func drawableDescriptor(frameIndex: FrameIndex, config: GameAppConfig) -> MetalDrawableFrameDescriptor {
+        let radius = Swift.max(config.radius, 0)
+        let chunkSize = Swift.max(config.chunkSize, 1)
+        let chunkSpan = Float((radius * 2 + 1) * chunkSize)
+        let center = Float(chunkSize) * 0.5
+        let margin: Float = 1.15
+        let aspect = Float(config.windowWidth) / Float(config.windowHeight)
+        let halfExtentZ = Swift.max(chunkSpan * 0.5 * margin, 1)
+        let halfExtentX = Swift.max(halfExtentZ * aspect, 1)
+
+        return MetalDrawableFrameDescriptor(
+            frameIndex: frameIndex,
+            label: "telluric.render.metal.game_app.drawable",
+            viewportWidth: config.windowWidth,
+            viewportHeight: config.windowHeight,
+            debugLineProjection: MetalDebugLineProjection(
+                centerX: center,
+                centerZ: center,
+                halfExtentX: halfExtentX,
+                halfExtentZ: halfExtentZ
+            )
+        )
+    }
+
     private static func gameInputFrame(tick: TickIndex, entityID: EntityID) -> GameInputFrame {
         if tick == .zero {
             return GameInputFrame(tick: tick, intents: [
@@ -641,8 +729,8 @@ public struct GameAppPipeline: Sendable {
     private static func drawableNotImplementedDiagnostic() -> DiagnosticMessage {
         DiagnosticMessage(
             severity: .info,
-            code: NamespaceID("game_app.drawable_rendering_not_implemented"),
-            message: "Drawable rendering is not implemented; the app shell only hosts the pipeline and prepares debug line data.",
+            code: NamespaceID("game_app.drawable_rendering_not_requested"),
+            message: "No drawable was requested for this app-shell dry-run frame; debug line data was prepared only.",
             source: "TelluricGameAppCore",
             metadata: []
         )

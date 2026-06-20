@@ -3,6 +3,7 @@ import Darwin
 import Metal
 import MetalKit
 import TelluricGameAppCore
+import TelluricRenderMetal
 
 @main
 enum TelluricGameAppMain {
@@ -62,15 +63,14 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = arguments.config.windowTitle
-        window.contentView = makeContentView(frame: contentRect)
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-
         let loopDriver = GameAppLoopDriver(
             pipeline: pipeline,
             verbose: arguments.verbose
         )
-        loopDriver.start(framesPerSecond: arguments.config.framesPerSecond)
+
+        window.contentView = makeContentView(frame: contentRect, loopDriver: loopDriver)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
 
         self.window = window
         self.loopDriver = loopDriver
@@ -84,13 +84,16 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
-    private func makeContentView(frame: NSRect) -> NSView {
-        if let device = MTLCreateSystemDefaultDevice() {
+    private func makeContentView(frame: NSRect, loopDriver: GameAppLoopDriver) -> NSView {
+        if let device = pipeline.metalRenderBackend.metalDevice {
             let view = MTKView(frame: frame, device: device)
-            view.clearColor = MTLClearColorMake(0.02, 0.025, 0.03, 1)
-            view.isPaused = true
+            let clearColor = MetalDrawableClearColor.debugBackground
+            view.colorPixelFormat = .bgra8Unorm
+            view.clearColor = MTLClearColorMake(clearColor.red, clearColor.green, clearColor.blue, clearColor.alpha)
+            view.isPaused = false
             view.enableSetNeedsDisplay = false
             view.preferredFramesPerSecond = Int(arguments.config.framesPerSecond)
+            view.delegate = loopDriver
             return view
         }
 
@@ -101,11 +104,9 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@MainActor
-private final class GameAppLoopDriver: NSObject {
+private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
     private var pipeline: GameAppPipeline
     private let verbose: Bool
-    private var timer: Timer?
     private var emittedInitialSummary = false
 
     init(pipeline: GameAppPipeline, verbose: Bool) {
@@ -114,38 +115,46 @@ private final class GameAppLoopDriver: NSObject {
         super.init()
     }
 
-    func start(framesPerSecond: UInt16) {
-        let interval = 1 / Double(framesPerSecond)
-        timer = Timer.scheduledTimer(
-            timeInterval: interval,
-            target: self,
-            selector: #selector(stepFrame),
-            userInfo: nil,
-            repeats: true
+    func draw(in view: MTKView) {
+        let frame = pipeline.stepForRendering()
+        let descriptor = frame.drawableDescriptor.withViewport(
+            width: Swift.max(Int(view.drawableSize.width), 1),
+            height: Swift.max(Int(view.drawableSize.height), 1)
         )
+        let drawableResult = pipeline.metalRenderBackend.renderDrawable(
+            snapshot: frame.renderSnapshot,
+            descriptor: descriptor,
+            drawable: view.currentDrawable,
+            renderPassDescriptor: view.currentRenderPassDescriptor
+        )
+
+        log(frame: frame.frameResult, drawableResult: drawableResult)
+    }
+
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        _ = size
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
     }
 
-    @objc private func stepFrame() {
-        let result = pipeline.step()
-        guard verbose || !emittedInitialSummary || !result.success else {
+    private func log(frame: GameAppFrameResult, drawableResult: MetalDrawableRenderResult) {
+        guard verbose || !emittedInitialSummary || !frame.success || !drawableResult.success else {
             return
         }
 
         emittedInitialSummary = true
         print(
-            "telluric-game-app frame \(result.runtimeFrameIndex.rawValue): "
-                + "runtime \(result.runtimeHash), "
-                + "render \(result.renderSnapshotHash), "
-                + "debug lines \(result.preparedDebugLineCount), "
-                + "drawable rendering implemented \(result.drawableRenderingImplemented), "
-                + "diagnostics info \(result.diagnosticsSummary.infos) "
-                + "warning \(result.diagnosticsSummary.warnings) "
-                + "error \(result.diagnosticsSummary.errors)"
+            "telluric-game-app frame \(frame.runtimeFrameIndex.rawValue): "
+                + "runtime \(frame.runtimeHash), "
+                + "render \(frame.renderSnapshotHash), "
+                + "prepared debug lines \(frame.preparedDebugLineCount), "
+                + "drawn debug lines \(drawableResult.drawnDebugLineCount), "
+                + "presented \(drawableResult.presentedDrawable), "
+                + "drawable success \(drawableResult.success), "
+                + "diagnostics info \(drawableResult.diagnostics.summary.infos) "
+                + "warning \(drawableResult.diagnostics.summary.warnings) "
+                + "error \(drawableResult.diagnostics.summary.errors)"
         )
     }
 }

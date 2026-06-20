@@ -93,7 +93,7 @@ let package = Package(
                 "TelluricRenderMetal",
             ]
         ),
-        .executableTarget(name: "TelluricGameApp", dependencies: ["TelluricGameAppCore"]),
+        .executableTarget(name: "TelluricGameApp", dependencies: ["TelluricGameAppCore", "TelluricRenderMetal"]),
 
         .testTarget(
             name: "TelluricArchitectureTests",

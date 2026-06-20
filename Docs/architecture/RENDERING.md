@@ -51,7 +51,7 @@ TelluricRuntime
 TelluricRenderMetal
 ```
 
-Phase 12 introduced the first `TelluricRenderMetal` skeleton. Phase 13 adds backend-level preparation for `DebugLine` primitives: CPU conversion into ordered scalar vertices, validation diagnostics, and optional Metal buffer creation when a device exists. It does not draw yet, does not present a drawable, and does not create app/window/view code.
+Phase 12 introduced the first `TelluricRenderMetal` skeleton. Phase 13 adds backend-level preparation for `DebugLine` primitives: CPU conversion into ordered scalar vertices, validation diagnostics, and optional Metal buffer creation when a device exists. Phase 17 adds a minimal drawable pass for debug lines when a caller supplies a drawable and render pass descriptor. The backend still does not create app/window/view code.
 
 Future Metal backend phases may translate resource identifiers into backend resources and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
 
@@ -114,10 +114,12 @@ The backend skeleton currently supports:
 - command queue creation when a device exists;
 - accepting `RenderSnapshot`;
 - debug line CPU conversion and Metal buffer preparation;
+- debug line render pipeline creation;
+- drawable-backed debug line command encoding when the app supplies a drawable;
 - deterministic frame results;
-- explicit unsupported diagnostics for renderable instances, texture/material binding, debug points, debug labels, and drawable presentation.
+- explicit unsupported diagnostics for renderable instances, texture/material binding, debug points, and debug labels.
 
-Debug line preparation is not the same as visible debug line rendering. There is still no shader library, render pipeline state, render pass, drawable, window, or presentation path.
+Debug line drawing is still a debug visualization path only. It uses a simple backend-owned top-down orthographic projection for chunk footprint lines. There is still no terrain mesh rendering, material system, texture loading, asset rendering, gameplay camera, or render graph.
 
 See `Docs/architecture/METAL_BACKEND.md`.
 

@@ -81,7 +81,7 @@ AppKit
 TelluricRenderMetal
 ```
 
-`TelluricRenderMetal` can consume the extracted `RenderSnapshot` as a backend client. Phase 13 can prepare extracted debug chunk boundary lines into CPU-side Metal vertices and, when a device exists, a Metal vertex buffer.
+`TelluricRenderMetal` can consume the extracted `RenderSnapshot` as a backend client. Phase 13 can prepare extracted debug chunk boundary lines into CPU-side Metal vertices and, when a device exists, a Metal vertex buffer. Phase 17 can draw those debug lines into a caller-provided drawable through a debug-only top-down projection.
 
 Extraction still does not allocate GPU resources, compile shaders, encode command buffers, create windows, or run a render loop. The bridge only produces backend-neutral render contracts.
 

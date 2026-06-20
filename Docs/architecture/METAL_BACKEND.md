@@ -2,6 +2,7 @@
 
 Phase 12 introduced `TelluricRenderMetal`, the isolated Metal backend module.
 Phase 13 adds the first backend-level debug line preparation path.
+Phase 17 adds the first minimal drawable debug-line render pass.
 
 This is the backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
 
@@ -66,14 +67,18 @@ The backend skeleton can:
 - convert ordered `DebugLine` primitives into ordered CPU-side Metal debug line vertices;
 - validate debug line endpoint coordinates;
 - create a Metal vertex buffer for debug lines when a Metal device context exists;
+- build a minimal debug line render pipeline from embedded shader source;
+- encode debug line draw calls into a caller-provided render pass descriptor;
+- present a caller-provided drawable;
 - return a deterministic `MetalRenderFrameResult`;
+- return an explicit `MetalDrawableRenderResult`;
 - emit explicit diagnostics for unsupported snapshot content.
 
-It does not claim that drawing occurred.
+Headless preparation and drawable rendering are separate APIs. `render(snapshot:)` prepares and validates without a drawable. `renderDrawable(snapshot:descriptor:drawable:renderPassDescriptor:)` is the drawable path.
 
 ## Debug Line Pipeline Status
 
-Phase 13 supports debug line preparation, not on-screen debug line drawing.
+Phase 13 supports debug line preparation. Phase 17 adds on-screen debug line drawing when a drawable is supplied.
 
 The pipeline is:
 
@@ -82,7 +87,11 @@ The pipeline is:
 3. convert each valid line to two scalar `MetalDebugLineVertex` values;
 4. preserve source ordering in the vertex array;
 5. pack the vertices into an internal Metal-side layout;
-6. create an `MTLBuffer` when a `MetalDeviceContext` is available.
+6. create an `MTLBuffer` when a `MetalDeviceContext` is available;
+7. build a minimal Metal render pipeline state;
+8. map line `x/z` world coordinates through a debug-only top-down orthographic projection;
+9. encode `.line` primitives into the caller's render pass descriptor;
+10. present the caller's drawable.
 
 The public debug line vertex contract stores scalar position and color fields. The internal packed representation is owned by `TelluricRenderMetal`; renderer-independent contracts are not treated as a GPU ABI.
 
@@ -90,7 +99,21 @@ When Metal is unavailable, CPU conversion still works and buffer creation report
 
 Phase 15 adds `telluric-headless-loop` as a top-level CLI client of this backend. The tool passes extracted `RenderSnapshot` values into `MetalRenderBackend` and records prepared debug line counts. In GPU-less or sandboxed environments, Metal unavailable and debug-line buffer unavailable diagnostics are treated as non-fatal warnings by the tool so the game/runtime/render-extraction chain can still be validated.
 
-Phase 16 adds `telluric-game-app` as a top-level macOS host. It can create an `MTKView` when a Metal device exists, then calls the same backend preparation path. It still does not provide drawable rendering to the backend.
+Phase 16 adds `telluric-game-app` as a top-level macOS host. Phase 17 lets that app provide the current `MTKView` drawable and render pass descriptor to the backend.
+
+## Drawable Debug Line Pass
+
+The drawable pass draws only `DebugLine` primitives from `RenderSnapshot`.
+
+It uses:
+
+- `MetalDrawableFrameDescriptor` for frame index, viewport, clear color, pixel format, and debug projection;
+- `MetalDebugLineProjection` for a debug-only top-down orthographic mapping from world `x/z` to clip space;
+- embedded minimal Metal shader source;
+- the existing prepared debug line vertex buffer;
+- caller-owned drawable and render pass descriptor.
+
+The pass clears the drawable and draws line primitives. It does not interpret `CameraSnapshot` yet; the top-down projection is explicitly debug-only so chunk grids are visible before terrain/camera rendering exists.
 
 ## Explicitly Unsupported
 
@@ -100,9 +123,10 @@ The backend still reports unsupported diagnostics for:
 - mesh/material/texture binding;
 - debug point drawing;
 - debug label drawing;
-- drawable presentation.
+- terrain mesh rendering;
+- asset rendering.
 
-Phase 13 no longer reports debug lines as simply unsupported when they can be prepared. It still does not implement shader compilation, render pass encoding, drawable presentation, or visible line drawing.
+Phase 17 no longer reports drawable debug-line presentation as unsupported when a drawable and render pass descriptor are supplied. The older headless `render(snapshot:)` API still reports drawable presentation as unsupported if the caller asks that preparation-only API to require a drawable.
 
 Unsupported content is an error in the frame result. This prevents the backend from silently pretending to render data it cannot draw yet.
 
@@ -117,9 +141,9 @@ Unsupported content is an error in the frame result. This prevents the backend f
 - a render loop tied to display refresh;
 - a platform event lifecycle.
 
-Apps or tools may provide drawables and presentation policy above this backend boundary. Phase 16 creates only the first app-shell host; it does not add backend drawable presentation yet.
+Apps or tools may provide drawables and presentation policy above this backend boundary. Phase 17 adds the backend draw call, but the backend still does not own the view or app lifecycle.
 
-The headless loop does not provide a drawable. The app shell creates a view host but still exercises backend acceptance and debug line preparation only.
+The headless loop does not provide a drawable. The app shell creates a view host and passes its drawable to the backend when Metal is available.
 
 ## Future Draw Pipeline
 
@@ -142,22 +166,22 @@ Metal backend tests are split between CPU-only behavior and conditional GPU beha
 
 CPU tests validate debug line conversion, ordering, coordinate preservation, color preservation, invalid coordinate diagnostics, and empty batch success. GPU buffer tests attempt `MetalDeviceContext.makeResult()` and only require an `MTLBuffer` when a Metal device is actually available. No test requires a display, window, drawable, `MTKView`, app lifecycle, or platform UI.
 
-## Not Implemented In Phase 13
+Drawable-path tests validate descriptor encoding, pipeline build-or-diagnose behavior, missing drawable diagnostics, and empty drawable-pass diagnostics without requiring a visible window.
 
-Phase 13 does not implement:
+## Not Implemented In Phase 17
 
-- shader code;
-- render pipeline state;
-- command encoder drawing;
-- `MTKView`;
-- drawable presentation;
-- app/window creation;
+Phase 17 does not implement:
+
 - terrain mesh generation;
 - asset loading or GPU upload;
 - runtime integration;
 - render graph execution;
+- persistent pipeline caching;
+- material or texture binding;
+- debug point drawing;
+- debug label drawing;
 - gameplay cameras;
 - editor UI;
 - audio, motion, or ML.
 
-Phase 16 still does not implement visible debug line drawing, drawable presentation through `TelluricRenderMetal`, terrain mesh generation, runtime-owned render-loop integration, or gameplay rendering.
+Phase 17 implements visible debug line drawing only when the app supplies a live Metal drawable.

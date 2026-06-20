@@ -1,6 +1,7 @@
 # Game App Shell
 
 Phase 16 creates the first minimal macOS app shell for Telluric Engine Next.
+Phase 17 adds the first drawable debug-line render pass.
 
 This is a SwiftPM executable host, not a traditional Xcode project or packaged app bundle. It exists to prove that the existing engine/game/runtime/render-extraction/Metal-preparation pipeline can be hosted visually without moving engine behavior into UI code.
 
@@ -14,7 +15,7 @@ TelluricGameApp -> TelluricGameAppCore -> TelluricGame -> TelluricRuntime -> eng
 
 Engine modules must not import `TelluricGameApp` or `TelluricGameAppCore`.
 
-`TelluricGameAppCore` is UI-free and testable. It owns the app-shell config, dry-run path, and stateful pipeline stepping over the existing contracts. `TelluricGameApp` owns only macOS process/window/view glue.
+`TelluricGameAppCore` is UI-free and testable. It owns the app-shell config, dry-run/smoke paths, stateful pipeline stepping, and renderer-independent frame values. `TelluricGameApp` owns only macOS process/window/view glue.
 
 ## App Shell vs Game Layer
 
@@ -42,13 +43,14 @@ The app shell can:
 - create a minimal macOS window;
 - create an `MTKView` when a Metal device exists;
 - initialize `GameSession` with deterministic config;
-- step the existing game/runtime pipeline on a simple timer;
+- step the existing game/runtime pipeline from the `MTKView` draw callback;
 - extract a backend-neutral `RenderSnapshot`;
 - pass that snapshot to `TelluricRenderMetal`;
 - prepare debug line vertex data through the Metal backend;
+- render debug chunk boundary lines into the current drawable when Metal and a drawable are available;
 - log structured frame diagnostics.
 
-The backend still does not draw debug lines to a drawable. The app reports `drawableRenderingImplemented: false` rather than pretending that prepared debug lines were presented.
+The app currently shows a clear background plus flat chunk boundary debug lines. Those lines come from `RuntimeRenderExtractor` and are drawn through a debug-only top-down projection. They are not terrain meshes.
 
 ## Safe Run
 
@@ -56,6 +58,7 @@ Use the repo-local wrapper:
 
 ```sh
 ./scripts/game-app-safe.sh --dry-run
+./scripts/game-app-safe.sh --smoke
 ```
 
 To open the minimal window from a local macOS shell:
@@ -66,14 +69,14 @@ To open the minimal window from a local macOS shell:
 
 The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under `.build/`. Raw `swift run` can use user-level SwiftPM cache and configuration paths, so wrappers are preferred for Codex and validation work.
 
+If Metal is unavailable, the app shell falls back to a plain view and no drawable rendering occurs. The no-window dry-run and smoke paths still validate the game/runtime/render-extraction/debug-line preparation chain.
+
 ## Not Implemented Yet
 
 Phase 16 does not implement:
 
 - an `.xcodeproj`;
 - a packaged app bundle;
-- real drawable rendering;
-- command encoding to present debug lines;
 - terrain mesh generation;
 - asset rendering;
 - platform input;
@@ -81,3 +84,5 @@ Phase 16 does not implement:
 - combat, inventory, quests, factions, RPG stats;
 - editor UI;
 - audio, motion, or ML.
+
+Phase 17 adds drawable debug-line rendering only. It still does not implement terrain rendering, materials, textures, asset loading, camera controls, player controls, or editor UI.

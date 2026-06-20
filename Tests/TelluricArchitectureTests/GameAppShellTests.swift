@@ -42,6 +42,14 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertTrue(arguments.verbose)
     }
 
+    func testArgumentParserSupportsSmokeMode() throws {
+        let arguments = try GameAppArgumentParser.parse(["--smoke", "--ticks", "4"])
+
+        XCTAssertTrue(arguments.dryRun)
+        XCTAssertTrue(arguments.smoke)
+        XCTAssertEqual(arguments.dryRunTicks, 1)
+    }
+
     func testPipelineCanStepWithoutOpeningWindow() throws {
         var pipeline = try GameAppPipeline(config: GameAppConfig(
             seed: 1,
@@ -57,6 +65,25 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(result.preparedDebugLineVertexCount, 8)
         XCTAssertFalse(result.drawableRenderingImplemented)
         XCTAssertEqual(result.diagnosticsSummary.errors, 0)
+    }
+
+    func testPipelineCanProduceRenderableFrameWithoutOpeningWindow() throws {
+        var pipeline = try GameAppPipeline(config: GameAppConfig(
+            seed: 1,
+            radius: 0,
+            chunkSize: 16,
+            verticalScale: 8
+        ))
+
+        let frame = pipeline.stepForRendering()
+
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 4)
+        XCTAssertEqual(frame.renderSnapshot.debugLines.count, 4)
+        XCTAssertEqual(frame.drawableDescriptor.frameIndex, frame.frameResult.runtimeFrameIndex)
+        XCTAssertEqual(frame.drawableDescriptor.viewportWidth, 1280)
+        XCTAssertEqual(frame.drawableDescriptor.viewportHeight, 720)
+        XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentX, 0)
+        XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentZ, 0)
     }
 
     func testDryRunUsesExistingPipelineWithoutWindow() throws {

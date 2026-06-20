@@ -30,6 +30,12 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertEqual(try roundTrip(capabilities), capabilities)
     }
 
+    func testDrawableFrameDescriptorRoundTripsThroughCodable() throws {
+        let descriptor = makeDrawableDescriptor()
+
+        XCTAssertEqual(try roundTrip(descriptor), descriptor)
+    }
+
     func testBackendReportsUnavailableGracefullyIfNoDeviceExists() {
         let backend = MetalRenderBackend()
 
@@ -163,6 +169,24 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertEqual(buffer.diagnostics.messages, [])
     }
 
+    func testDebugLineRenderPipelineBuildsOrReportsCleanly() {
+        switch MetalDeviceContext.makeResult() {
+        case let .success(context):
+            let pipeline = MetalDebugLineRenderPipeline.make(context: context, pixelFormat: .bgra8Unorm)
+
+            XCTAssertTrue(pipeline.success)
+            XCTAssertEqual(pipeline.diagnostics.messages, [])
+
+        case .failure:
+            let pipeline = MetalDebugLineRenderPipeline.make(context: nil, pixelFormat: .bgra8Unorm)
+
+            XCTAssertFalse(pipeline.success)
+            XCTAssertTrue(pipeline.diagnostics.messages.contains {
+                $0.code.rawValue == "render.metal.debug_line.pipeline_unavailable"
+            })
+        }
+    }
+
     func testDebugLineBufferCreationHandlesMetalAvailability() {
         let batch = MetalDebugLinePipeline.makeBatch(lines: [
             DebugLine(start: .zero, end: Float3(x: 1, y: 0, z: 0), color: .blue),
@@ -250,6 +274,39 @@ final class MetalBackendTests: XCTestCase {
         })
     }
 
+    func testDrawableRenderPathReportsMissingDrawableCleanly() {
+        let backend = MetalRenderBackend()
+        let snapshot = makeSnapshot(debugLines: [
+            DebugLine(start: .zero, end: Float3(x: 1, y: 0, z: 0), color: .white),
+        ])
+
+        let result = backend.renderDrawable(snapshot: snapshot, descriptor: makeDrawableDescriptor())
+        let diagnosticCodes = result.diagnostics.messages.map(\.code.rawValue)
+
+        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.presentedDrawable)
+        XCTAssertEqual(result.renderSnapshotHash, snapshot.stableHash)
+        XCTAssertEqual(result.preparedDebugLineCount, 1)
+        XCTAssertEqual(result.preparedDebugLineVertexCount, 2)
+        XCTAssertTrue(diagnosticCodes.contains("render.metal.drawable.missing"))
+        XCTAssertTrue(diagnosticCodes.contains("render.metal.render_pass_descriptor.missing"))
+    }
+
+    func testEmptyDrawableDebugLinePassReportsClearMissingDrawableResult() {
+        let backend = MetalRenderBackend()
+        let snapshot = makeSnapshot()
+
+        let result = backend.renderDrawable(snapshot: snapshot, descriptor: makeDrawableDescriptor())
+
+        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.presentedDrawable)
+        XCTAssertEqual(result.preparedDebugLineCount, 0)
+        XCTAssertEqual(result.preparedDebugLineVertexCount, 0)
+        XCTAssertTrue(result.diagnostics.messages.contains {
+            $0.code.rawValue == "render.metal.drawable.missing"
+        })
+    }
+
     func testRenderRuntimeAndExtractionTargetsDoNotImportMetal() throws {
         let root = try packageRoot()
         for target in ["TelluricRender", "TelluricRuntime", "TelluricRenderExtraction"] {
@@ -295,6 +352,20 @@ final class MetalBackendTests: XCTestCase {
             debugLines: debugLines,
             debugPoints: debugPoints,
             debugLabels: debugLabels
+        )
+    }
+
+    private func makeDrawableDescriptor() -> MetalDrawableFrameDescriptor {
+        MetalDrawableFrameDescriptor(
+            frameIndex: .zero,
+            viewportWidth: 64,
+            viewportHeight: 64,
+            debugLineProjection: MetalDebugLineProjection(
+                centerX: 0,
+                centerZ: 0,
+                halfExtentX: 16,
+                halfExtentZ: 16
+            )
         )
     }
 

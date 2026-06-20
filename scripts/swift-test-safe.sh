@@ -28,4 +28,5 @@ fi
   --config-path "$SWIFTPM_CONFIG_DIR" \
   --security-path "$SWIFTPM_SECURITY_DIR" \
   -Xswiftc -module-cache-path \
-  -Xswiftc "$SWIFT_MODULE_CACHE_PATH"
+  -Xswiftc "$SWIFT_MODULE_CACHE_PATH" \
+  "$@"

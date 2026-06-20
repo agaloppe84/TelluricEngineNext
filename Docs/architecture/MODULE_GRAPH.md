@@ -152,7 +152,7 @@ Phase 16 implements `TelluricGameApp` as the first minimal macOS app shell:
 
 - `TelluricGameAppCore` is UI-free and testable; it builds the stateful app-shell pipeline over the existing game/runtime/render-extraction/Metal-preparation modules;
 - `TelluricGameApp` is the SwiftPM executable target that owns AppKit/MetalKit window and view glue;
-- drawable rendering is not implemented yet, and prepared debug lines are reported honestly as prepared, not drawn;
+- Phase 17 adds drawable debug-line rendering for extracted chunk boundaries when a live Metal drawable is supplied;
 - engine modules, runtime, game, render extraction, and render contracts must not import app-shell targets.
 
 See `Docs/architecture/GAME_APP_SHELL.md`.

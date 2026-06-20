@@ -70,7 +70,8 @@ The app shell is a thin SwiftPM executable host over the existing validated pipe
 
 ```sh
 ./scripts/game-app-safe.sh --dry-run
+./scripts/game-app-safe.sh --smoke
 ./scripts/game-app-safe.sh
 ```
 
-The dry run exercises the app-shell pipeline without opening a window. The normal run opens a minimal macOS window and `MTKView` when Metal is available, but drawable rendering is not implemented yet. Use the safe wrapper because it keeps SwiftPM scratch, cache, config, home, and module-cache paths under this repository.
+The dry run and smoke paths exercise the app-shell pipeline without opening a window. The normal run opens a minimal macOS window and `MTKView` when Metal is available. The current drawable pass clears the view and draws extracted chunk boundary debug lines only; it does not render terrain meshes, materials, textures, assets, or gameplay. Use the safe wrapper because it keeps SwiftPM scratch, cache, config, home, and module-cache paths under this repository.
