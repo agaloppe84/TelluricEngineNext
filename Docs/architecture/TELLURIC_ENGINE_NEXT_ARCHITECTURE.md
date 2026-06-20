@@ -253,9 +253,11 @@ TelluricSeedValidator
 TelluricAssetCooker
 TelluricAssetCookerCore
 TelluricReplayInspector
+TelluricHeadlessLoop
+TelluricHeadlessLoopCore
 ```
 
-These are command-line target boundaries only in Phase 0. Phase 4 implements the seed validator. Phase 10 implements the asset cooker as a manifest validation and descriptor/report tool. Replay inspection remains future work.
+These are command-line target boundaries only. Phase 4 implements the seed validator. Phase 10 implements the asset cooker as a manifest validation and descriptor/report tool. Phase 15 implements the headless loop as a vertical integration smoke executable over game, runtime, render extraction, Metal debug-line preparation, and persistence packaging. Replay inspection remains future work.
 
 ## 5. Runtime loop
 
@@ -270,6 +272,19 @@ Raw input
   -> RenderSnapshot / AudioSnapshot / MotionSnapshot
   -> RenderMetal / AudioRuntime / Tools
 ```
+
+Phase 15 validates the current subset of this chain headlessly:
+
+```text
+GameInputFrame
+  -> GameSession
+  -> RuntimeSnapshot
+  -> RenderSnapshot
+  -> TelluricRenderMetal debug line preparation
+  -> TelluricPersistence package summaries
+```
+
+This is a validation executable, not the runtime app. It creates no window, drawable, `MTKView`, app bundle, platform input layer, or gameplay system.
 
 ## 6. What changed from the first attempt
 
@@ -313,10 +328,11 @@ Procedural systems testable before rendering
 12. Isolated RenderMetal backend skeleton
 13. Metal debug line pipeline
 14. Game layer contracts
-15. ReplayInspector behavior
-16. Runtime app thin
-17. WorldLab
-18. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+15. Headless end-to-end game loop
+16. ReplayInspector behavior
+17. Runtime app thin
+18. WorldLab
+19. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

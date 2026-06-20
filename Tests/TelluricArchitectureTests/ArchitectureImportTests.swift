@@ -7,6 +7,7 @@ import TelluricDeterminism
 import TelluricDiagnostics
 import TelluricECS
 import TelluricGame
+import TelluricHeadlessLoopCore
 import TelluricMath
 import TelluricPersistence
 import TelluricRender
@@ -79,6 +80,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricRenderExtraction",
             "TelluricPersistence",
             "TelluricRenderMetal",
+            "TelluricHeadlessLoopCore",
         ]
         let forbiddenTokens = [
             "random(in:",
@@ -143,7 +145,12 @@ final class ArchitectureImportTests: XCTestCase {
             let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
             try assertNoSwiftSourceLine(
                 under: moduleURL,
-                containsAnyImportOf: ["TelluricAssetCooker", "TelluricAssetCookerCore"]
+                containsAnyImportOf: [
+                    "TelluricAssetCooker",
+                    "TelluricAssetCookerCore",
+                    "TelluricHeadlessLoop",
+                    "TelluricHeadlessLoopCore",
+                ]
             )
         }
     }

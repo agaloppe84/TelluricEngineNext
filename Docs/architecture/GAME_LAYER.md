@@ -30,6 +30,8 @@ The dependency must never reverse. Engine modules must not import `TelluricGame`
 
 Future apps can translate keyboard, mouse, controller, touch, or accessibility input into `GameIntent` values. This phase only defines the engine-facing game contracts.
 
+Phase 15 adds `telluric-headless-loop` as a CLI client of `TelluricGame`. It creates deterministic `GameInputFrame` values directly and feeds them into `GameSession` without platform input devices, an app bundle, UI, a player controller, or gameplay systems.
+
 ## Game Layer vs Runtime
 
 `GameSession` owns a `TelluricRuntime` as a client. It maps ordered game intents into one ordered `SimulationInputFrame`, then steps runtime through `RuntimeStepInput`.
@@ -40,6 +42,8 @@ Runtime remains unaware of the game layer. Runtime still consumes only:
 - engine-neutral `SimulationInputFrame` commands.
 
 Invalid game intents are reported before runtime stepping. A failed mapping does not mutate the wrapped runtime.
+
+The headless loop uses this exact boundary: it owns a `GameSession` as a client, steps it with ordered game input frames, then passes the resulting `RuntimeSnapshot` to render extraction. Runtime still does not know about game-layer types.
 
 ## Game Intents vs Simulation Commands
 
@@ -110,13 +114,13 @@ GameplayKit
 
 ## Not Implemented In Phase 14
 
-Phase 14 does not implement:
+Phase 14 and the Phase 15 headless loop do not implement:
 
 - `TelluricGameApp`;
 - app/window/view code;
 - platform input devices;
-- rendering or render extraction;
-- Metal backend integration;
+- renderer ownership inside `TelluricGame`;
+- direct Metal backend integration inside `TelluricGame`;
 - player controller implementation;
 - gameplay camera;
 - combat;

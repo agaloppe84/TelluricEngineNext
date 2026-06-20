@@ -128,6 +128,14 @@ Telluric.GameStepResult.v1
 
 Game determinism depends on ordered game intents, deterministic rule-profile scaling, ordered simulation command output, runtime snapshot hashes, ordered diagnostics, and explicit success state. Game hashes exclude platform input events, device handles, app lifecycle state, rendering resources, wall-clock time, process-local values, and unordered collection traversal.
 
+Phase 15 headless loop reports add:
+
+```text
+Telluric.HeadlessLoopReport.v1
+```
+
+Headless loop determinism depends on ordered game input frames, runtime snapshot hashes, render snapshot hashes, Metal debug-line preparation counts, ordered persistence package summaries, ordered per-tick summaries, normalized diagnostics, and explicit success state. Reports exclude wall-clock timestamps, performance timing, app/window/drawable state, device input events, process-local values, and unordered collection traversal. Metal device availability is recorded as report data; unavailable Metal is normalized to deterministic warning diagnostics by the tool rather than treated as a fatal validation failure.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

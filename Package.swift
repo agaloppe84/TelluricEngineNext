@@ -25,6 +25,7 @@ let package = Package(
         .executable(name: "telluric-seed-validator", targets: ["TelluricSeedValidator"]),
         .executable(name: "telluric-asset-cooker", targets: ["TelluricAssetCooker"]),
         .executable(name: "TelluricReplayInspector", targets: ["TelluricReplayInspector"]),
+        .executable(name: "telluric-headless-loop", targets: ["TelluricHeadlessLoop"]),
     ],
     targets: [
         .target(name: "TelluricCore"),
@@ -53,6 +54,26 @@ let package = Package(
         .target(name: "TelluricAssetCookerCore", dependencies: ["TelluricAssets", "TelluricCore", "TelluricDeterminism", "TelluricDiagnostics"]),
         .executableTarget(name: "TelluricAssetCooker", dependencies: ["TelluricAssetCookerCore"]),
         .executableTarget(name: "TelluricReplayInspector", dependencies: ["TelluricRuntime", "TelluricSimulation", "TelluricDiagnostics"]),
+        .target(
+            name: "TelluricHeadlessLoopCore",
+            dependencies: [
+                "TelluricCore",
+                "TelluricMath",
+                "TelluricDeterminism",
+                "TelluricDiagnostics",
+                "TelluricECS",
+                "TelluricSimulation",
+                "TelluricWorld",
+                "TelluricStreaming",
+                "TelluricRuntime",
+                "TelluricGame",
+                "TelluricRender",
+                "TelluricRenderExtraction",
+                "TelluricRenderMetal",
+                "TelluricPersistence",
+            ]
+        ),
+        .executableTarget(name: "TelluricHeadlessLoop", dependencies: ["TelluricHeadlessLoopCore"]),
 
         .testTarget(
             name: "TelluricArchitectureTests",
@@ -76,6 +97,7 @@ let package = Package(
                 "TelluricRenderMetal",
                 "TelluricAssetCookerCore",
                 "TelluricSeedValidatorCore",
+                "TelluricHeadlessLoopCore",
             ]
         ),
     ]

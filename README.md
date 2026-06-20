@@ -53,3 +53,13 @@ swift run telluric-asset-cooker --manifest Assets/Manifests/assets.json --output
 ```
 
 Phase 10 produces validation reports and cooked descriptors only. It does not convert meshes, textures, materials, audio, motion, terrain recipes, or biome recipes yet. Use `--strict` to make unsupported conversions explicit errors.
+
+## Headless loop
+
+The headless loop is a vertical integration smoke tool. It runs game intent mapping, runtime stepping, render extraction, Metal debug-line preparation, and persistence packaging without creating an app, window, view, or drawable:
+
+```sh
+swift run telluric-headless-loop --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --ticks 3 --report Tools/benchmarks/headless_loop_report.json
+```
+
+The report is deterministic-friendly and contains ordered per-tick summaries, final runtime/render hashes, debug-line preparation counts, Metal availability diagnostics, and persistence package summaries.

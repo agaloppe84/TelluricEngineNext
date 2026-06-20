@@ -33,6 +33,8 @@ if [ -d Sources ]; then
     TelluricAssetCookerCore
     TelluricAssetCooker
     TelluricReplayInspector
+    TelluricHeadlessLoopCore
+    TelluricHeadlessLoop
   )
 
   for source_path in Sources/*; do
@@ -94,6 +96,8 @@ if [ -d Sources ]; then
     Sources/TelluricPersistence
     Sources/TelluricSeedValidatorCore
     Sources/TelluricAssetCookerCore
+    Sources/TelluricHeadlessLoopCore
+    Sources/TelluricHeadlessLoop
   )
 
   for deterministic_dir in "${deterministic_dirs[@]}"; do
@@ -127,8 +131,8 @@ if [ -d Sources ]; then
   for engine_dir in "${engine_dirs[@]}"; do
     [ -d "$engine_dir" ] || continue
 
-    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
-      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
+    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector|TelluricHeadlessLoop|TelluricHeadlessLoopCore)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
+      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector|TelluricHeadlessLoop|TelluricHeadlessLoopCore)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
       fail "$engine_dir imports app/game/tool modules"
     fi
   done
@@ -165,6 +169,11 @@ if [ -d Sources ]; then
       grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricRenderMetal|TelluricGameApp)([[:space:]]|$)" Sources/TelluricGame --include="*.swift" >&2
       fail "TelluricGame must not import render backends or app targets"
     fi
+  fi
+
+  if grep -R -n -E "MTKView|NSWindow|UIWindow" Sources --include="*.swift" >/dev/null 2>&1; then
+    grep -R -n -E "MTKView|NSWindow|UIWindow" Sources --include="*.swift" >&2
+    fail "current architecture phase must not create app/window/view code"
   fi
 fi
 

@@ -85,6 +85,8 @@ The public debug line vertex contract stores scalar position and color fields. T
 
 When Metal is unavailable, CPU conversion still works and buffer creation reports `render.metal.debug_line.buffer_unavailable` instead of failing tests that do not require a GPU.
 
+Phase 15 adds `telluric-headless-loop` as a top-level CLI client of this backend. The tool passes extracted `RenderSnapshot` values into `MetalRenderBackend` and records prepared debug line counts. In GPU-less or sandboxed environments, Metal unavailable and debug-line buffer unavailable diagnostics are treated as non-fatal warnings by the tool so the game/runtime/render-extraction chain can still be validated.
+
 ## Explicitly Unsupported
 
 The backend still reports unsupported diagnostics for:
@@ -111,6 +113,8 @@ Unsupported content is an error in the frame result. This prevents the backend f
 - a platform event lifecycle.
 
 Future apps or tools may provide drawables and presentation policy above this backend boundary.
+
+The headless loop does not provide a drawable. It exercises backend acceptance and debug line preparation only.
 
 ## Future Draw Pipeline
 
@@ -150,3 +154,5 @@ Phase 13 does not implement:
 - gameplay cameras;
 - editor UI;
 - audio, motion, or ML.
+
+Phase 15 still does not implement visible drawing, drawable presentation, app/window/view code, terrain mesh generation, runtime render-loop integration, or gameplay rendering.

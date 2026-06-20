@@ -154,14 +154,19 @@ TelluricSeedValidatorCore -> TelluricCore, TelluricDeterminism, TelluricWorld, T
 TelluricAssetCooker -> TelluricAssetCookerCore
 TelluricAssetCookerCore -> TelluricAssets, TelluricCore, TelluricDeterminism, TelluricDiagnostics
 TelluricReplayInspector -> TelluricRuntime, TelluricSimulation, TelluricDiagnostics
+TelluricHeadlessLoop -> TelluricHeadlessLoopCore
+TelluricHeadlessLoopCore -> TelluricGame, TelluricRuntime, TelluricRenderExtraction, TelluricRender, TelluricRenderMetal, TelluricPersistence, TelluricDiagnostics, foundation contracts
 ```
 
 `TelluricSeedValidatorCore` is a testable tool-support target, not an engine module. Engine modules must not import it.
 `TelluricAssetCookerCore` is also a testable tool-support target, not an engine module. Engine modules must not import it.
+`TelluricHeadlessLoopCore` is a testable tool-support target, not an engine module. Engine modules must not import it.
 
 Phase 4 implements `telluric-seed-validator` as the first real CLI engine tool. It validates deterministic terrain+biome chunk generation over an ordered grid and writes deterministic JSON reports without app, UI, rendering, gameplay, or Metal dependencies.
 
 Phase 10 implements `telluric-asset-cooker` as the first asset manifest validation/cooker CLI. It validates manifests and writes deterministic reports without pretending to convert unsupported asset kinds.
+
+Phase 15 implements `telluric-headless-loop` as the app-free vertical smoke executable. It drives `TelluricGame`, `TelluricRuntime`, `TelluricRenderExtraction`, `TelluricRenderMetal`, and `TelluricPersistence` as a top-level client without creating app, window, UI, drawable, gameplay-system, or Xcode boundaries.
 
 `TelluricReplayInspector` remains a command-line target boundary only until its tool phase.
 
@@ -202,7 +207,9 @@ Phase 0 architecture guards must fail if:
 - `TelluricGame` imports render backend or app targets.
 - low-level engine modules import `TelluricRenderExtraction`.
 - engine modules import `TelluricAssetCooker` or `TelluricAssetCookerCore`.
+- engine modules import `TelluricHeadlessLoop` or `TelluricHeadlessLoopCore`.
 - low-level modules import `TelluricPersistence` outside allowed runtime/persistence boundaries.
 - render contracts, runtime, or render extraction import `TelluricRenderMetal`.
+- active sources contain app/window/view code such as `MTKView`, `NSWindow`, or `UIWindow`.
 
 Phase 4 also runs a tiny repo-local seed validator smoke check from `scripts/check-architecture-guards.sh`.
