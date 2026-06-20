@@ -154,6 +154,7 @@ Phase 16 implements `TelluricGameApp` as the first minimal macOS app shell:
 - `TelluricGameApp` is the SwiftPM executable target that owns AppKit/MetalKit window and view glue;
 - Phase 17 adds drawable debug-line rendering for extracted chunk boundaries when a live Metal drawable is supplied;
 - Phase 18 adds bounded safe run/smoke options and JSON diagnostics reports without changing engine dependency direction;
+- Phase 20 adds debug-only camera/projection contracts in `TelluricGameAppCore` and AppKit-only keyboard/mouse event glue in `TelluricGameApp`;
 - engine modules, runtime, game, render extraction, and render contracts must not import app-shell targets.
 
 See `Docs/architecture/GAME_APP_SHELL.md`.
@@ -190,6 +191,8 @@ TelluricGameAppCore -> TelluricGame, TelluricRuntime, TelluricRenderExtraction, 
 ```
 
 `TelluricGameAppCore` is a testable app-support target, not an engine module. It must remain free of AppKit, SwiftUI, MetalKit, and window/view code.
+
+`TelluricGameAppCore` may own debug visualization state such as `DebugCameraState` and platform-neutral debug camera control intents. These are app-shell contracts, not game/player input contracts, and must not be imported by engine modules.
 
 `TelluricGameApp` is the only active source target allowed to import `AppKit` and `MetalKit`. It may import `Metal` as app-shell platform glue for `MTKView` device creation. No engine module may import either app-shell target.
 

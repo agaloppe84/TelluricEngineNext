@@ -77,6 +77,88 @@ final class GameAppShellTests: XCTestCase {
         }
     }
 
+    func testDebugCameraConfigCodableRoundTrip() throws {
+        let config = DebugCameraConfig(
+            projectionMode: .topDownOrthographic,
+            minimumHalfExtent: 2,
+            maximumHalfExtent: 512,
+            zoomStepFactor: 1.5,
+            panStepFraction: 0.25,
+            fitMargin: 1.2
+        )
+
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(DebugCameraConfig.self, from: data)
+
+        XCTAssertEqual(decoded, config)
+    }
+
+    func testDefaultDebugCameraFramesRadiusOneChunkGrid() {
+        let config = GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8)
+        let camera = DebugCameraState.focused(appConfig: config, viewportAspect: 16.0 / 9.0)
+        let projection = camera.projection(
+            viewportWidth: 1600,
+            viewportHeight: 900,
+            appConfig: config
+        )
+
+        XCTAssertTrue(projection.success)
+        XCTAssertEqual(projection.state.centerX, 8, accuracy: 0.0001)
+        XCTAssertEqual(projection.state.centerZ, 8, accuracy: 0.0001)
+        XCTAssertEqual(projection.projection.halfExtentZ, 27.6, accuracy: 0.0001)
+
+        let minXClip = (-16 - projection.projection.centerX) / projection.projection.halfExtentX
+        let maxXClip = (32 - projection.projection.centerX) / projection.projection.halfExtentX
+        let minZClip = (-16 - projection.projection.centerZ) / projection.projection.halfExtentZ
+        let maxZClip = (32 - projection.projection.centerZ) / projection.projection.halfExtentZ
+
+        XCTAssertGreaterThanOrEqual(minXClip, -1)
+        XCTAssertLessThanOrEqual(maxXClip, 1)
+        XCTAssertGreaterThanOrEqual(minZClip, -1)
+        XCTAssertLessThanOrEqual(maxZClip, 1)
+    }
+
+    func testDebugCameraZoomPanAndResetAreDeterministic() {
+        let config = GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8)
+        let camera = DebugCameraState.focused(appConfig: config, viewportAspect: 16.0 / 9.0)
+
+        let zoomedIn = camera.applying(.zoomIn, appConfig: config, viewportAspect: 16.0 / 9.0).state
+        XCTAssertLessThan(zoomedIn.halfExtentZ, camera.halfExtentZ)
+
+        let zoomedOut = zoomedIn.applying(.zoomOut, appConfig: config, viewportAspect: 16.0 / 9.0).state
+        XCTAssertEqual(zoomedOut.halfExtentZ, camera.halfExtentZ, accuracy: 0.0001)
+
+        let panned = camera.applying(.pan(deltaX: 1, deltaZ: -1), appConfig: config, viewportAspect: 16.0 / 9.0).state
+        XCTAssertGreaterThan(panned.centerX, camera.centerX)
+        XCTAssertLessThan(panned.centerZ, camera.centerZ)
+
+        let reset = panned.applying(.reset, appConfig: config, viewportAspect: 16.0 / 9.0).state
+        XCTAssertEqual(reset, camera)
+    }
+
+    func testInvalidDebugCameraExtentIsClampedWithDiagnostics() {
+        let config = GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8)
+        let invalid = DebugCameraState(centerX: .nan, centerZ: .infinity, halfExtentZ: -1)
+
+        let result = invalid.validated(appConfig: config, viewportAspect: 16.0 / 9.0)
+
+        XCTAssertTrue(result.success)
+        XCTAssertGreaterThanOrEqual(result.diagnostics.summary.warnings, 3)
+        XCTAssertTrue(result.state.centerX.isFinite)
+        XCTAssertTrue(result.state.centerZ.isFinite)
+        XCTAssertGreaterThan(result.state.halfExtentZ, 0)
+    }
+
+    func testDebugCameraProjectionIsDeterministicForSameState() {
+        let config = GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8)
+        let camera = DebugCameraState.focused(appConfig: config, viewportAspect: 16.0 / 9.0)
+
+        let first = camera.projection(viewportWidth: 1600, viewportHeight: 900, appConfig: config)
+        let second = camera.projection(viewportWidth: 1600, viewportHeight: 900, appConfig: config)
+
+        XCTAssertEqual(first, second)
+    }
+
     func testPipelineCanStepWithoutOpeningWindow() throws {
         var pipeline = try GameAppPipeline(config: GameAppConfig(
             seed: 1,
@@ -111,6 +193,44 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(frame.drawableDescriptor.viewportHeight, 720)
         XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentX, 0)
         XCTAssertGreaterThan(frame.drawableDescriptor.debugLineProjection.halfExtentZ, 0)
+        XCTAssertEqual(frame.frameResult.debugCameraState.centerX, 8, accuracy: 0.0001)
+        XCTAssertEqual(frame.frameResult.debugCameraState.centerZ, 8, accuracy: 0.0001)
+    }
+
+    func testPipelineUsesControlledViewportForDebugProjection() throws {
+        var pipeline = try GameAppPipeline(config: GameAppConfig(
+            seed: 1,
+            radius: 1,
+            chunkSize: 16,
+            verticalScale: 8
+        ))
+
+        let frame = pipeline.stepForRendering(viewportWidth: 1000, viewportHeight: 500)
+
+        XCTAssertEqual(frame.drawableDescriptor.viewportWidth, 1000)
+        XCTAssertEqual(frame.drawableDescriptor.viewportHeight, 500)
+        XCTAssertEqual(
+            frame.drawableDescriptor.debugLineProjection.halfExtentX,
+            frame.drawableDescriptor.debugLineProjection.halfExtentZ * 2,
+            accuracy: 0.0001
+        )
+    }
+
+    func testAppShellControlIntentsDoNotMutateRuntimeStateDirectly() throws {
+        var pipeline = try GameAppPipeline(config: GameAppConfig(
+            seed: 1,
+            radius: 1,
+            chunkSize: 16,
+            verticalScale: 8
+        ))
+        let beforeHash = pipeline.snapshot().stableHash
+
+        let diagnostics = pipeline.applyDebugCameraControl(.zoomIn)
+        let afterHash = pipeline.snapshot().stableHash
+
+        XCTAssertFalse(diagnostics.hasErrors)
+        XCTAssertEqual(beforeHash, afterHash)
+        XCTAssertLessThan(pipeline.debugCamera.halfExtentZ, DebugCameraState.focused(appConfig: pipeline.config).halfExtentZ)
     }
 
     func testDryRunUsesExistingPipelineWithoutWindow() throws {
@@ -159,6 +279,12 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(decoded.framesRendered, 0)
         XCTAssertEqual(decoded.debugLinesExtracted, 4)
         XCTAssertEqual(decoded.debugVerticesPrepared, 8)
+        XCTAssertEqual(decoded.debugProjectionMode, .topDownOrthographic)
+        XCTAssertEqual(decoded.debugCameraCenterX, 8)
+        XCTAssertEqual(decoded.debugCameraCenterZ, 8)
+        XCTAssertNotNil(decoded.debugCameraHalfExtentZ)
+        XCTAssertEqual(decoded.debugViewportWidth, 1280)
+        XCTAssertEqual(decoded.debugViewportHeight, 720)
         XCTAssertEqual(decoded.drawCallsAttempted, 0)
         XCTAssertEqual(decoded.drawCallsSucceeded, 0)
     }

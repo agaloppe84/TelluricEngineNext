@@ -53,6 +53,8 @@ TelluricRenderMetal
 
 Phase 12 introduced the first `TelluricRenderMetal` skeleton. Phase 13 adds backend-level preparation for `DebugLine` primitives: CPU conversion into ordered scalar vertices, validation diagnostics, and optional Metal buffer creation when a device exists. Phase 17 adds a minimal drawable pass for debug lines when a caller supplies a drawable and render pass descriptor. The backend still does not create app/window/view code.
 
+Phase 20 adds debug camera/projection control in the app-shell layer. `TelluricRender` remains unchanged as a backend-neutral contract module; it still does not know about AppKit events, keyboard controls, mouse wheels, or Metal uniforms.
+
 Future Metal backend phases may translate resource identifiers into backend resources and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
 
 ## Render Snapshot
@@ -82,6 +84,8 @@ It stores:
 - aspect ratio.
 
 It does not store input bindings, player state, camera controllers, platform view state, or app lifecycle data.
+
+The app-shell debug camera introduced in Phase 20 is separate from `CameraSnapshot`. It is a UI-free helper in `TelluricGameAppCore` that derives `MetalDebugLineProjection` values for the current debug grid. It does not change renderer-independent camera contracts and is not a player or terrain camera.
 
 ## Debug Primitives
 
@@ -120,6 +124,8 @@ The backend skeleton currently supports:
 - explicit unsupported diagnostics for renderable instances, texture/material binding, debug points, and debug labels.
 
 Debug line drawing is still a debug visualization path only. It uses a simple backend-owned top-down orthographic projection for chunk footprint lines. There is still no terrain mesh rendering, material system, texture loading, asset rendering, gameplay camera, or render graph.
+
+Phase 20 makes that top-down projection controllable from the app shell: the default view fits the generated chunk grid, viewport aspect is accounted for, zoom and pan adjust only debug visualization state, and reset refocuses the grid.
 
 See `Docs/architecture/METAL_BACKEND.md`.
 

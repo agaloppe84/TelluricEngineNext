@@ -78,6 +78,380 @@ public struct GameAppConfig: Codable, Equatable, Sendable {
     }
 }
 
+private extension GameAppConfig {
+    var defaultViewportAspect: Float {
+        Float(windowWidth) / Float(windowHeight)
+    }
+}
+
+/// Debug-only projection mode for app-shell visualization.
+public enum DebugProjectionMode: String, Codable, CaseIterable, Sendable {
+    /// Top-down orthographic projection over world X/Z coordinates.
+    case topDownOrthographic
+}
+
+/// Configuration for app-shell debug camera behavior.
+public struct DebugCameraConfig: Codable, Equatable, Sendable {
+    /// Projection mode used for the debug chunk grid.
+    public let projectionMode: DebugProjectionMode
+
+    /// Minimum positive vertical half extent in world units.
+    public let minimumHalfExtent: Float
+
+    /// Maximum vertical half extent in world units.
+    public let maximumHalfExtent: Float
+
+    /// Multiplicative zoom step. Values greater than one zoom out when multiplied.
+    public let zoomStepFactor: Float
+
+    /// Fraction of the current vertical half extent used for one keyboard pan step.
+    public let panStepFraction: Float
+
+    /// Margin around the generated chunk grid when fitting the camera.
+    public let fitMargin: Float
+
+    /// Default debug camera configuration.
+    public static let `default` = DebugCameraConfig()
+
+    /// Creates debug camera configuration.
+    public init(
+        projectionMode: DebugProjectionMode = .topDownOrthographic,
+        minimumHalfExtent: Float = 1,
+        maximumHalfExtent: Float = 1_000_000,
+        zoomStepFactor: Float = 1.2,
+        panStepFraction: Float = 0.15,
+        fitMargin: Float = 1.15
+    ) {
+        precondition(minimumHalfExtent.isFinite && minimumHalfExtent > 0, "minimumHalfExtent must be finite and positive")
+        precondition(maximumHalfExtent.isFinite && maximumHalfExtent >= minimumHalfExtent, "maximumHalfExtent must be finite and at least minimumHalfExtent")
+        precondition(zoomStepFactor.isFinite && zoomStepFactor > 1, "zoomStepFactor must be finite and greater than one")
+        precondition(panStepFraction.isFinite && panStepFraction > 0, "panStepFraction must be finite and positive")
+        precondition(fitMargin.isFinite && fitMargin > 0, "fitMargin must be finite and positive")
+        self.projectionMode = projectionMode
+        self.minimumHalfExtent = minimumHalfExtent
+        self.maximumHalfExtent = maximumHalfExtent
+        self.zoomStepFactor = zoomStepFactor
+        self.panStepFraction = panStepFraction
+        self.fitMargin = fitMargin
+    }
+}
+
+/// Platform-neutral debug camera controls for app-shell visualization.
+public enum DebugCameraControlIntent: Codable, Equatable, Sendable {
+    /// Zooms toward the focus point.
+    case zoomIn
+
+    /// Zooms away from the focus point.
+    case zoomOut
+
+    /// Pans by normalized debug-camera steps, not gameplay movement.
+    case pan(deltaX: Float, deltaZ: Float)
+
+    /// Refits the debug camera to the generated chunk grid.
+    case reset
+}
+
+/// Debug-only camera state for top-down chunk-grid visualization.
+public struct DebugCameraState: Codable, Equatable, Sendable {
+    /// Projection mode used by this camera state.
+    public let projectionMode: DebugProjectionMode
+
+    /// World X coordinate at the center of the view.
+    public let centerX: Float
+
+    /// World Z coordinate at the center of the view.
+    public let centerZ: Float
+
+    /// Positive world Z half extent. Horizontal extent is derived from viewport aspect.
+    public let halfExtentZ: Float
+
+    /// Creates debug camera state. Invalid values can be clamped through `validated`.
+    public init(
+        projectionMode: DebugProjectionMode = .topDownOrthographic,
+        centerX: Float,
+        centerZ: Float,
+        halfExtentZ: Float
+    ) {
+        self.projectionMode = projectionMode
+        self.centerX = centerX
+        self.centerZ = centerZ
+        self.halfExtentZ = halfExtentZ
+    }
+
+    /// Fits the generated chunk grid for the supplied app config and viewport aspect.
+    public static func focused(
+        appConfig: GameAppConfig,
+        cameraConfig: DebugCameraConfig = .default,
+        viewportAspect: Float? = nil
+    ) -> DebugCameraState {
+        let aspect = validAspect(viewportAspect ?? appConfig.defaultViewportAspect, fallback: appConfig.defaultViewportAspect)
+        let bounds = gridBounds(appConfig: appConfig)
+        let requiredHalfExtentZ = Swift.max(bounds.halfExtentZ, bounds.halfExtentX / aspect) * cameraConfig.fitMargin
+        let clampedHalfExtentZ = clamp(
+            requiredHalfExtentZ,
+            min: cameraConfig.minimumHalfExtent,
+            max: cameraConfig.maximumHalfExtent
+        )
+
+        return DebugCameraState(
+            projectionMode: cameraConfig.projectionMode,
+            centerX: bounds.centerX,
+            centerZ: bounds.centerZ,
+            halfExtentZ: clampedHalfExtentZ
+        )
+    }
+
+    /// Returns a validated and clamped version of this debug camera state.
+    public func validated(
+        appConfig: GameAppConfig,
+        cameraConfig: DebugCameraConfig = .default,
+        viewportAspect: Float? = nil
+    ) -> DebugCameraValidationResult {
+        var diagnostics: [DiagnosticMessage] = []
+        let focused = Self.focused(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect)
+
+        var centerX = self.centerX
+        if !centerX.isFinite {
+            diagnostics.append(Self.warning(
+                code: "game_app.debug_camera.invalid_center_x",
+                message: "Debug camera centerX was not finite and was reset to the grid focus.",
+                key: "centerX",
+                value: "\(self.centerX)"
+            ))
+            centerX = focused.centerX
+        }
+
+        var centerZ = self.centerZ
+        if !centerZ.isFinite {
+            diagnostics.append(Self.warning(
+                code: "game_app.debug_camera.invalid_center_z",
+                message: "Debug camera centerZ was not finite and was reset to the grid focus.",
+                key: "centerZ",
+                value: "\(self.centerZ)"
+            ))
+            centerZ = focused.centerZ
+        }
+
+        var halfExtentZ = self.halfExtentZ
+        if !halfExtentZ.isFinite || halfExtentZ <= 0 {
+            diagnostics.append(Self.warning(
+                code: "game_app.debug_camera.invalid_half_extent",
+                message: "Debug camera halfExtentZ was invalid and was reset to the grid fit.",
+                key: "halfExtentZ",
+                value: "\(self.halfExtentZ)"
+            ))
+            halfExtentZ = focused.halfExtentZ
+        }
+
+        let clampedHalfExtentZ = Self.clamp(
+            halfExtentZ,
+            min: cameraConfig.minimumHalfExtent,
+            max: cameraConfig.maximumHalfExtent
+        )
+        if clampedHalfExtentZ != halfExtentZ {
+            diagnostics.append(Self.warning(
+                code: "game_app.debug_camera.clamped_half_extent",
+                message: "Debug camera halfExtentZ was clamped to the configured range.",
+                key: "halfExtentZ",
+                value: "\(halfExtentZ)"
+            ))
+        }
+
+        return DebugCameraValidationResult(
+            state: DebugCameraState(
+                projectionMode: cameraConfig.projectionMode,
+                centerX: centerX,
+                centerZ: centerZ,
+                halfExtentZ: clampedHalfExtentZ
+            ),
+            diagnostics: DiagnosticReport(messages: diagnostics)
+        )
+    }
+
+    /// Applies a platform-neutral debug camera control.
+    public func applying(
+        _ intent: DebugCameraControlIntent,
+        appConfig: GameAppConfig,
+        cameraConfig: DebugCameraConfig = .default,
+        viewportAspect: Float? = nil
+    ) -> DebugCameraValidationResult {
+        let validState = validated(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect).state
+
+        switch intent {
+        case .zoomIn:
+            return DebugCameraState(
+                projectionMode: validState.projectionMode,
+                centerX: validState.centerX,
+                centerZ: validState.centerZ,
+                halfExtentZ: validState.halfExtentZ / cameraConfig.zoomStepFactor
+            ).validated(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect)
+
+        case .zoomOut:
+            return DebugCameraState(
+                projectionMode: validState.projectionMode,
+                centerX: validState.centerX,
+                centerZ: validState.centerZ,
+                halfExtentZ: validState.halfExtentZ * cameraConfig.zoomStepFactor
+            ).validated(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect)
+
+        case let .pan(deltaX, deltaZ):
+            let panScale = validState.halfExtentZ * cameraConfig.panStepFraction
+            return DebugCameraState(
+                projectionMode: validState.projectionMode,
+                centerX: validState.centerX + deltaX * panScale,
+                centerZ: validState.centerZ + deltaZ * panScale,
+                halfExtentZ: validState.halfExtentZ
+            ).validated(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect)
+
+        case .reset:
+            return DebugCameraValidationResult(
+                state: Self.focused(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect),
+                diagnostics: DiagnosticReport(messages: [])
+            )
+        }
+    }
+
+    /// Builds a Metal debug-line projection for this camera state and viewport.
+    public func projection(
+        viewportWidth: Int,
+        viewportHeight: Int,
+        appConfig: GameAppConfig,
+        cameraConfig: DebugCameraConfig = .default
+    ) -> DebugCameraProjectionResult {
+        var diagnostics: [DiagnosticMessage] = []
+        var width = viewportWidth
+        var height = viewportHeight
+
+        if width <= 0 {
+            diagnostics.append(Self.warning(
+                code: "game_app.debug_camera.invalid_viewport_width",
+                message: "Debug camera viewport width was invalid and was reset to the configured window width.",
+                key: "viewportWidth",
+                value: "\(viewportWidth)"
+            ))
+            width = Swift.max(appConfig.windowWidth, 1)
+        }
+
+        if height <= 0 {
+            diagnostics.append(Self.warning(
+                code: "game_app.debug_camera.invalid_viewport_height",
+                message: "Debug camera viewport height was invalid and was reset to the configured window height.",
+                key: "viewportHeight",
+                value: "\(viewportHeight)"
+            ))
+            height = Swift.max(appConfig.windowHeight, 1)
+        }
+
+        let aspect = Self.validAspect(Float(width) / Float(height), fallback: appConfig.defaultViewportAspect)
+        let validation = validated(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: aspect)
+        diagnostics.append(contentsOf: validation.diagnostics.messages)
+        let state = validation.state
+        let halfExtentX = Swift.max(state.halfExtentZ * aspect, cameraConfig.minimumHalfExtent)
+
+        return DebugCameraProjectionResult(
+            state: state,
+            projection: MetalDebugLineProjection(
+                centerX: state.centerX,
+                centerZ: state.centerZ,
+                halfExtentX: halfExtentX,
+                halfExtentZ: state.halfExtentZ
+            ),
+            viewportWidth: width,
+            viewportHeight: height,
+            viewportAspect: aspect,
+            diagnostics: DiagnosticReport(messages: diagnostics)
+        )
+    }
+
+    private static func gridBounds(appConfig: GameAppConfig) -> GridBounds {
+        let radius = Swift.max(appConfig.radius, 0)
+        let chunkSize = Swift.max(appConfig.chunkSize, 1)
+        let min = Float(-radius * chunkSize)
+        let max = Float((radius + 1) * chunkSize)
+        let center = (min + max) * 0.5
+        let halfExtent = Swift.max((max - min) * 0.5, 1)
+
+        return GridBounds(
+            centerX: center,
+            centerZ: center,
+            halfExtentX: halfExtent,
+            halfExtentZ: halfExtent
+        )
+    }
+
+    private static func validAspect(_ value: Float, fallback: Float) -> Float {
+        value.isFinite && value > 0 ? value : Swift.max(fallback, 1)
+    }
+
+    private static func clamp(_ value: Float, min: Float, max: Float) -> Float {
+        Swift.max(min, Swift.min(max, value))
+    }
+
+    private static func warning(
+        code: String,
+        message: String,
+        key: String,
+        value: String
+    ) -> DiagnosticMessage {
+        DiagnosticMessage(
+            severity: .warning,
+            code: NamespaceID(code),
+            message: message,
+            source: "TelluricGameAppCore",
+            metadata: [
+                DiagnosticMetadata(key: key, value: value),
+            ]
+        )
+    }
+
+    private struct GridBounds {
+        let centerX: Float
+        let centerZ: Float
+        let halfExtentX: Float
+        let halfExtentZ: Float
+    }
+}
+
+/// Result of validating debug camera state.
+public struct DebugCameraValidationResult: Codable, Equatable, Sendable {
+    /// Validated and clamped camera state.
+    public let state: DebugCameraState
+
+    /// Ordered validation diagnostics.
+    public let diagnostics: DiagnosticReport
+
+    /// True when validation produced no errors.
+    public var success: Bool {
+        !diagnostics.hasErrors
+    }
+}
+
+/// Result of deriving Metal projection uniforms from debug camera state.
+public struct DebugCameraProjectionResult: Codable, Equatable, Sendable {
+    /// Validated state used for the projection.
+    public let state: DebugCameraState
+
+    /// Metal backend projection uniforms.
+    public let projection: MetalDebugLineProjection
+
+    /// Viewport width in pixels.
+    public let viewportWidth: Int
+
+    /// Viewport height in pixels.
+    public let viewportHeight: Int
+
+    /// Viewport aspect ratio.
+    public let viewportAspect: Float
+
+    /// Ordered projection diagnostics.
+    public let diagnostics: DiagnosticReport
+
+    /// True when projection derivation produced no errors.
+    public var success: Bool {
+        !diagnostics.hasErrors
+    }
+}
+
 /// App-shell execution mode selected by command-line arguments.
 public enum GameAppRunMode: String, Codable, CaseIterable, Sendable {
     /// Runs the engine pipeline without creating a window.
@@ -387,6 +761,10 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
     public let preparedDebugLineCount: Int
     public let preparedDebugLineVertexCount: Int
     public let preparedDebugLineBufferByteLength: Int
+    public let debugCameraState: DebugCameraState
+    public let debugProjection: MetalDebugLineProjection
+    public let debugViewportWidth: Int
+    public let debugViewportHeight: Int
     public let metalAvailable: Bool
     public let drawableRenderingImplemented: Bool
     public let diagnosticsSummary: DiagnosticSummary
@@ -404,6 +782,10 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
         preparedDebugLineCount: Int,
         preparedDebugLineVertexCount: Int,
         preparedDebugLineBufferByteLength: Int,
+        debugCameraState: DebugCameraState,
+        debugProjection: MetalDebugLineProjection,
+        debugViewportWidth: Int,
+        debugViewportHeight: Int,
         metalAvailable: Bool,
         drawableRenderingImplemented: Bool,
         diagnosticsSummary: DiagnosticSummary,
@@ -419,6 +801,10 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
         self.preparedDebugLineCount = preparedDebugLineCount
         self.preparedDebugLineVertexCount = preparedDebugLineVertexCount
         self.preparedDebugLineBufferByteLength = preparedDebugLineBufferByteLength
+        self.debugCameraState = debugCameraState
+        self.debugProjection = debugProjection
+        self.debugViewportWidth = debugViewportWidth
+        self.debugViewportHeight = debugViewportHeight
         self.metalAvailable = metalAvailable
         self.drawableRenderingImplemented = drawableRenderingImplemented
         self.diagnosticsSummary = diagnosticsSummary
@@ -466,6 +852,14 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
     public let renderSnapshotHash: StableHash
     public let debugLinesExtracted: Int
     public let debugVerticesPrepared: Int
+    public let debugProjectionMode: DebugProjectionMode
+    public let debugCameraCenterX: Float
+    public let debugCameraCenterZ: Float
+    public let debugCameraHalfExtentZ: Float
+    public let debugProjectionHalfExtentX: Float
+    public let debugProjectionHalfExtentZ: Float
+    public let debugViewportWidth: Int
+    public let debugViewportHeight: Int
     public let mtkViewAvailable: Bool
     public let drawableAvailable: Bool
     public let drawCallAttempted: Bool
@@ -494,6 +888,14 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
         self.renderSnapshotHash = frameResult.renderSnapshotHash
         self.debugLinesExtracted = frameResult.preparedDebugLineCount
         self.debugVerticesPrepared = frameResult.preparedDebugLineVertexCount
+        self.debugProjectionMode = frameResult.debugCameraState.projectionMode
+        self.debugCameraCenterX = frameResult.debugCameraState.centerX
+        self.debugCameraCenterZ = frameResult.debugCameraState.centerZ
+        self.debugCameraHalfExtentZ = frameResult.debugCameraState.halfExtentZ
+        self.debugProjectionHalfExtentX = frameResult.debugProjection.halfExtentX
+        self.debugProjectionHalfExtentZ = frameResult.debugProjection.halfExtentZ
+        self.debugViewportWidth = frameResult.debugViewportWidth
+        self.debugViewportHeight = frameResult.debugViewportHeight
         self.mtkViewAvailable = mtkViewAvailable
         self.drawableAvailable = drawableAvailable
         self.drawCallAttempted = drawCallAttempted
@@ -520,6 +922,14 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
     public let drawableAvailable: Bool
     public let debugLinesExtracted: Int
     public let debugVerticesPrepared: Int
+    public let debugProjectionMode: DebugProjectionMode?
+    public let debugCameraCenterX: Float?
+    public let debugCameraCenterZ: Float?
+    public let debugCameraHalfExtentZ: Float?
+    public let debugProjectionHalfExtentX: Float?
+    public let debugProjectionHalfExtentZ: Float?
+    public let debugViewportWidth: Int?
+    public let debugViewportHeight: Int?
     public let drawCallsAttempted: Int
     public let drawCallsSucceeded: Int
     public let diagnosticsSummary: DiagnosticSummary
@@ -556,6 +966,14 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
         self.drawableAvailable = drawableAvailable
         self.debugLinesExtracted = frames.last?.debugLinesExtracted ?? 0
         self.debugVerticesPrepared = frames.last?.debugVerticesPrepared ?? 0
+        self.debugProjectionMode = frames.last?.debugProjectionMode
+        self.debugCameraCenterX = frames.last?.debugCameraCenterX
+        self.debugCameraCenterZ = frames.last?.debugCameraCenterZ
+        self.debugCameraHalfExtentZ = frames.last?.debugCameraHalfExtentZ
+        self.debugProjectionHalfExtentX = frames.last?.debugProjectionHalfExtentX
+        self.debugProjectionHalfExtentZ = frames.last?.debugProjectionHalfExtentZ
+        self.debugViewportWidth = frames.last?.debugViewportWidth
+        self.debugViewportHeight = frames.last?.debugViewportHeight
         self.drawCallsAttempted = frames.filter(\.drawCallAttempted).count
         self.drawCallsSucceeded = frames.filter(\.drawCallSucceeded).count
         self.diagnosticsSummary = diagnosticReport.summary
@@ -646,11 +1064,16 @@ public struct GameAppPipeline: Sendable {
     private let extractor: RuntimeRenderExtractor
     private let extractionConfig: RuntimeRenderExtractionConfig
     private let metalBackend: MetalRenderBackend
+    private let debugCameraConfig: DebugCameraConfig
+    private var debugCameraState: DebugCameraState
     private let controlledEntityID: EntityID
     private var nextTick: TickIndex
 
     /// Creates a validated app-shell pipeline.
-    public init(config: GameAppConfig) throws {
+    public init(
+        config: GameAppConfig,
+        debugCameraConfig: DebugCameraConfig = .default
+    ) throws {
         let diagnostics = Self.configurationDiagnostics(config)
         guard !DiagnosticReport(messages: diagnostics).hasErrors else {
             throw GameAppConfigurationError(diagnostics: diagnostics)
@@ -661,6 +1084,12 @@ public struct GameAppPipeline: Sendable {
         self.extractor = RuntimeRenderExtractor()
         self.extractionConfig = Self.extractionConfig(config: config)
         self.metalBackend = MetalRenderBackend(config: MetalRenderBackendConfig(label: "telluric.render.metal.game_app"))
+        self.debugCameraConfig = debugCameraConfig
+        self.debugCameraState = DebugCameraState.focused(
+            appConfig: config,
+            cameraConfig: debugCameraConfig,
+            viewportAspect: config.defaultViewportAspect
+        )
         self.controlledEntityID = EntityID(index: 1)
         self.nextTick = .zero
     }
@@ -675,9 +1104,36 @@ public struct GameAppPipeline: Sendable {
         metalBackend
     }
 
+    /// Current app-shell debug camera state.
+    public var debugCamera: DebugCameraState {
+        debugCameraState
+    }
+
     /// Current runtime snapshot before the next frame is stepped.
     public func snapshot() -> RuntimeSnapshot {
         session.snapshot()
+    }
+
+    /// Applies a platform-neutral debug camera control without stepping game or runtime state.
+    @discardableResult
+    public mutating func applyDebugCameraControl(
+        _ intent: DebugCameraControlIntent,
+        viewportWidth: Int? = nil,
+        viewportHeight: Int? = nil
+    ) -> DiagnosticReport {
+        let aspect = Self.viewportAspect(
+            width: viewportWidth ?? config.windowWidth,
+            height: viewportHeight ?? config.windowHeight,
+            fallback: config.defaultViewportAspect
+        )
+        let result = debugCameraState.applying(
+            intent,
+            appConfig: config,
+            cameraConfig: debugCameraConfig,
+            viewportAspect: aspect
+        )
+        debugCameraState = result.state
+        return result.diagnostics
     }
 
     /// Steps one deterministic game/runtime/render-preparation frame.
@@ -686,13 +1142,24 @@ public struct GameAppPipeline: Sendable {
     }
 
     /// Steps one deterministic frame and returns the render snapshot for drawable hosts.
-    public mutating func stepForRendering(drawableRequested: Bool = false) -> GameAppRenderableFrame {
+    public mutating func stepForRendering(
+        drawableRequested: Bool = false,
+        viewportWidth: Int? = nil,
+        viewportHeight: Int? = nil
+    ) -> GameAppRenderableFrame {
         let tick = nextTick
         let gameStep = session.step(GameStepInput(
             gameInputFrame: Self.gameInputFrame(tick: tick, entityID: controlledEntityID)
         ))
         let runtimeSnapshot = gameStep.runtimeSnapshot
         let extraction = extractor.extract(from: runtimeSnapshot, config: extractionConfig)
+        let projection = debugCameraState.projection(
+            viewportWidth: viewportWidth ?? config.windowWidth,
+            viewportHeight: viewportHeight ?? config.windowHeight,
+            appConfig: config,
+            cameraConfig: debugCameraConfig
+        )
+        debugCameraState = projection.state
         let metalFrame = metalBackend.render(
             snapshot: extraction.renderSnapshot,
             descriptor: MetalRenderFrameDescriptor(
@@ -704,6 +1171,7 @@ public struct GameAppPipeline: Sendable {
 
         var diagnostics = gameStep.diagnostics.messages
             + extraction.diagnostics.messages
+            + projection.diagnostics.messages
             + Self.normalizedMetalDiagnostics(from: metalFrame.diagnostics.messages)
         if !drawableRequested {
             diagnostics.append(Self.drawableNotRequestedDiagnostic())
@@ -725,6 +1193,10 @@ public struct GameAppPipeline: Sendable {
             preparedDebugLineCount: metalFrame.preparedDebugLineCount,
             preparedDebugLineVertexCount: metalFrame.preparedDebugLineVertexCount,
             preparedDebugLineBufferByteLength: metalFrame.preparedDebugLineBufferByteLength,
+            debugCameraState: projection.state,
+            debugProjection: projection.projection,
+            debugViewportWidth: projection.viewportWidth,
+            debugViewportHeight: projection.viewportHeight,
             metalAvailable: metalBackend.isAvailable,
             drawableRenderingImplemented: drawableRequested,
             diagnosticsSummary: diagnosticReport.summary,
@@ -737,7 +1209,10 @@ public struct GameAppPipeline: Sendable {
             renderSnapshot: extraction.renderSnapshot,
             drawableDescriptor: Self.drawableDescriptor(
                 frameIndex: runtimeSnapshot.state.frameIndex,
-                config: config
+                config: config,
+                projection: projection.projection,
+                viewportWidth: projection.viewportWidth,
+                viewportHeight: projection.viewportHeight
             )
         )
     }
@@ -877,28 +1352,29 @@ public struct GameAppPipeline: Sendable {
         )
     }
 
-    private static func drawableDescriptor(frameIndex: FrameIndex, config: GameAppConfig) -> MetalDrawableFrameDescriptor {
-        let radius = Swift.max(config.radius, 0)
-        let chunkSize = Swift.max(config.chunkSize, 1)
-        let chunkSpan = Float((radius * 2 + 1) * chunkSize)
-        let center = Float(chunkSize) * 0.5
-        let margin: Float = 1.15
-        let aspect = Float(config.windowWidth) / Float(config.windowHeight)
-        let halfExtentZ = Swift.max(chunkSpan * 0.5 * margin, 1)
-        let halfExtentX = Swift.max(halfExtentZ * aspect, 1)
-
+    private static func drawableDescriptor(
+        frameIndex: FrameIndex,
+        config: GameAppConfig,
+        projection: MetalDebugLineProjection,
+        viewportWidth: Int,
+        viewportHeight: Int
+    ) -> MetalDrawableFrameDescriptor {
         return MetalDrawableFrameDescriptor(
             frameIndex: frameIndex,
             label: "telluric.render.metal.game_app.drawable",
-            viewportWidth: config.windowWidth,
-            viewportHeight: config.windowHeight,
-            debugLineProjection: MetalDebugLineProjection(
-                centerX: center,
-                centerZ: center,
-                halfExtentX: halfExtentX,
-                halfExtentZ: halfExtentZ
-            )
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight,
+            debugLineProjection: projection
         )
+    }
+
+    private static func viewportAspect(width: Int, height: Int, fallback: Float) -> Float {
+        guard width > 0, height > 0 else {
+            return Swift.max(fallback, 1)
+        }
+
+        let aspect = Float(width) / Float(height)
+        return aspect.isFinite && aspect > 0 ? aspect : Swift.max(fallback, 1)
     }
 
     private static func gameInputFrame(tick: TickIndex, entityID: EntityID) -> GameInputFrame {
@@ -1048,12 +1524,17 @@ public enum GameAppRuntime {
             lines.append("final render hash: \(finalFrame.renderSnapshotHash)")
             lines.append("debug lines: \(finalFrame.preparedDebugLineCount)")
             lines.append("debug line vertices: \(finalFrame.preparedDebugLineVertexCount)")
+            lines.append("debug camera center: \(finalFrame.debugCameraState.centerX), \(finalFrame.debugCameraState.centerZ)")
+            lines.append("debug camera half extent z: \(finalFrame.debugCameraState.halfExtentZ)")
+            lines.append("debug projection half extent x: \(finalFrame.debugProjection.halfExtentX)")
+            lines.append("debug projection mode: \(finalFrame.debugCameraState.projectionMode.rawValue)")
+            lines.append("debug viewport: \(finalFrame.debugViewportWidth)x\(finalFrame.debugViewportHeight)")
         }
 
         if verbose {
             for frame in result.frames {
                 lines.append(
-                    "tick \(frame.tick.rawValue): runtime \(frame.runtimeHash), render \(frame.renderSnapshotHash), debug lines \(frame.preparedDebugLineCount)"
+                    "tick \(frame.tick.rawValue): runtime \(frame.runtimeHash), render \(frame.renderSnapshotHash), debug lines \(frame.preparedDebugLineCount), camera center \(frame.debugCameraState.centerX),\(frame.debugCameraState.centerZ), halfZ \(frame.debugCameraState.halfExtentZ)"
                 )
             }
         }

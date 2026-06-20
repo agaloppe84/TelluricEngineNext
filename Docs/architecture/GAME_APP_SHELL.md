@@ -3,6 +3,7 @@
 Phase 16 creates the first minimal macOS app shell for Telluric Engine Next.
 Phase 17 adds the first drawable debug-line render pass.
 Phase 18 hardens the local app run and visual smoke workflow.
+Phase 20 adds debug-only camera and projection controls for viewing the chunk grid.
 
 This is a SwiftPM executable host, not a traditional Xcode project or packaged app bundle. It exists to prove that the existing engine/game/runtime/render-extraction/Metal-preparation pipeline can be hosted visually without moving engine behavior into UI code.
 
@@ -22,7 +23,7 @@ Engine modules must not import `TelluricGameApp` or `TelluricGameAppCore`.
 
 `TelluricGame` remains app-free. It still owns game sessions, ordered game intents, and mapping into simulation commands.
 
-The app shell does not add platform input handling yet. It creates deterministic `GameInputFrame` values through the same minimal intent path validated by the headless loop.
+The app shell creates deterministic `GameInputFrame` values through the same minimal intent path validated by the headless loop. Phase 20 adds platform input only for debug visualization controls. Those controls are not routed through `GameIntent`, do not mutate game/runtime state directly, and must not become player movement or a gameplay input layer.
 
 ## UI Import Isolation
 
@@ -55,6 +56,38 @@ The app currently shows a clear background plus flat chunk boundary debug lines.
 
 When Metal and a drawable are available, the app submits those debug lines through `TelluricRenderMetal` and reports attempted/succeeded draw calls. When Metal is unavailable, the app reports that state clearly and the no-window smoke path remains valid.
 
+## Debug Camera
+
+Phase 20 adds a UI-free debug camera model in `TelluricGameAppCore`:
+
+- `DebugProjectionMode`;
+- `DebugCameraConfig`;
+- `DebugCameraState`;
+- `DebugCameraControlIntent`;
+- `DebugCameraValidationResult`;
+- `DebugCameraProjectionResult`.
+
+This is a debug visualization camera, not a gameplay camera. It stores only the data needed to frame the flat chunk grid: world-space center X/Z, vertical half extent, viewport aspect, and projection mode. It does not store input devices, player state, camera controllers, runtime entities, or gameplay intent.
+
+The default camera fits the generated chunk grid with a small margin. For the common radius 1 / chunk size 16 smoke run, the default focus is centered on the generated 3-by-3 chunk footprint and scaled so the negative chunks, origin area, and positive chunks are visible without user input.
+
+Invalid camera or viewport values are clamped or reset by `TelluricGameAppCore` and reported as diagnostics. The app diagnostics report includes the final camera center, half extent, projection extents, viewport size, projection mode, debug line counts, and draw success.
+
+## Controls
+
+`TelluricGameApp` owns the AppKit event glue. `TelluricGameAppCore` receives only platform-neutral `DebugCameraControlIntent` values.
+
+Current controls:
+
+- `+` or `=`: zoom in;
+- `-` or `_`: zoom out;
+- arrow keys: pan;
+- `W`, `A`, `S`, `D`: pan;
+- `0` or `R`: reset/focus the debug grid;
+- mouse wheel: zoom.
+
+These controls are debug visualization controls only. They do not create a player controller, gameplay camera, editor UI, or general input system.
+
 ## Safe Run
 
 Use the repo-local wrapper:
@@ -69,6 +102,7 @@ To open the minimal window from a local macOS shell:
 ```sh
 ./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8
 ./scripts/game-app-safe.sh --run --diagnostics-report Tools/benchmarks/game_app_visual_report.json
+./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_camera_report.json
 ```
 
 The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under `.build/`. Raw `swift run` can use user-level SwiftPM cache and configuration paths, so wrappers are preferred for Codex and validation work.
@@ -89,6 +123,8 @@ The report contains:
 - `MTKView` and drawable availability when known;
 - final debug line and vertex counts;
 - attempted and successful draw call counts;
+- final debug camera center and half extent;
+- final debug projection extents, mode, and viewport size;
 - ordered frame summaries;
 - ordered diagnostics and severity counts;
 - success state.
@@ -110,3 +146,5 @@ Phase 16 does not implement:
 - audio, motion, or ML.
 
 Phase 17 adds drawable debug-line rendering only. It still does not implement terrain rendering, materials, textures, asset loading, camera controls, player controls, or editor UI.
+
+Phase 20 adds debug camera controls only. It still does not implement a gameplay camera, player input, terrain mesh rendering, asset rendering, editor UI, or a full input system.

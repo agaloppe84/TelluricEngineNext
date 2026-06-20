@@ -4,6 +4,7 @@ Phase 12 introduced `TelluricRenderMetal`, the isolated Metal backend module.
 Phase 13 adds the first backend-level debug line preparation path.
 Phase 17 adds the first minimal drawable debug-line render pass.
 Phase 18 hardens app-shell visual smoke reporting around that drawable path.
+Phase 20 feeds the drawable pass with app-shell debug camera projection controls.
 
 This is the backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
 
@@ -116,6 +117,14 @@ It uses:
 
 The pass clears the drawable and draws line primitives. It does not interpret `CameraSnapshot` yet; the top-down projection is explicitly debug-only so chunk grids are visible before terrain/camera rendering exists.
 
+Phase 20 keeps the projection split clean:
+
+- `TelluricGameAppCore` owns UI-free debug camera state and validation;
+- `TelluricGameApp` owns AppKit keyboard/mouse glue;
+- `TelluricRenderMetal` owns only `MetalDebugLineProjection` uniforms and shader consumption.
+
+The backend receives center X/Z and half extents from the caller through `MetalDrawableFrameDescriptor`. It does not know about key presses, mouse wheels, gameplay cameras, players, or runtime entities. Invalid or collapsed extents must be rejected before creating backend uniforms; app-core validation clamps or resets those values and records diagnostics.
+
 ## Explicitly Unsupported
 
 The backend still reports unsupported diagnostics for:
@@ -171,6 +180,8 @@ Drawable-path tests validate descriptor encoding, pipeline build-or-diagnose beh
 
 App-shell smoke tests stay above the backend. They validate argument parsing, no-window smoke reports, and import boundaries without requiring a visible `MTKView`. A local user can run `./scripts/game-app-safe.sh --run` to visually verify that debug chunk boundaries draw when Metal and a drawable are available.
 
+Phase 20 app-shell tests also validate that debug camera projection values are deterministic for the same camera state and viewport. These tests do not require a display.
+
 ## Not Implemented In Phase 17
 
 Phase 17 does not implement:
@@ -188,3 +199,5 @@ Phase 17 does not implement:
 - audio, motion, or ML.
 
 Phase 17 implements visible debug line drawing only when the app supplies a live Metal drawable.
+
+Phase 20 implements debug camera/projection controls only. It does not implement a gameplay camera, input device system, terrain rendering, asset rendering, debug labels/points, editor UI, or camera controls inside the Metal backend.

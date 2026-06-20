@@ -77,4 +77,14 @@ The app shell is a thin SwiftPM executable host over the existing validated pipe
 
 The dry run and smoke paths exercise the app-shell pipeline without opening a window. `--run` opens a minimal macOS window and `MTKView` when Metal is available. The current drawable pass clears the view and draws extracted chunk boundary debug lines only; it does not render terrain meshes, materials, textures, assets, or gameplay.
 
+The app shell includes debug-only projection controls for viewing the chunk grid. `+`/`=` zooms in, `-` zooms out, arrow keys or `W`/`A`/`S`/`D` pan, `0` or `R` refocuses the grid, and mouse wheel zooms. These controls affect only debug visualization, not game/runtime state.
+
+For a bounded visual check with diagnostics:
+
+```sh
+./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_camera_report.json
+```
+
+With Metal and a drawable available, the radius 1 chunk grid should be centered and scaled in the window, with debug line draw calls succeeding and no diagnostics errors.
+
 Use the safe wrapper because it keeps SwiftPM scratch, cache, config, home, and module-cache paths under this repository. `./scripts/game-app-safe.sh --script-help` prints wrapper examples without launching the app.

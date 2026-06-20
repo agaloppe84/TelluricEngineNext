@@ -75,9 +75,11 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
             verbose: arguments.verbose
         )
 
-        window.contentView = makeContentView(frame: contentRect, loopDriver: loopDriver)
+        let contentView = makeContentView(frame: contentRect, loopDriver: loopDriver)
+        window.contentView = contentView
         window.center()
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(contentView)
 
         self.window = window
         self.loopDriver = loopDriver
@@ -101,7 +103,7 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeContentView(frame: NSRect, loopDriver: GameAppLoopDriver) -> NSView {
         if let device = pipeline.metalRenderBackend.metalDevice {
-            let view = MTKView(frame: frame, device: device)
+            let view = GameAppMetalView(frame: frame, device: device)
             let clearColor = MetalDrawableClearColor.debugBackground
             view.colorPixelFormat = .bgra8Unorm
             view.clearColor = MTLClearColorMake(clearColor.red, clearColor.green, clearColor.blue, clearColor.alpha)
@@ -109,6 +111,9 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
             view.enableSetNeedsDisplay = false
             view.preferredFramesPerSecond = Int(arguments.config.framesPerSecond)
             view.delegate = loopDriver
+            view.debugControlHandler = { [weak loopDriver] intent in
+                loopDriver?.handleDebugCameraControl(intent)
+            }
             loopDriver.setMTKViewAvailable(true)
             return view
         }
@@ -131,11 +136,15 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
     private var reportWritten = false
     private(set) var mtkViewAvailable = false
     private var drawableEverAvailable = false
+    private var viewportWidth: Int
+    private var viewportHeight: Int
 
     init(arguments: GameAppArguments, pipeline: GameAppPipeline, verbose: Bool) {
         self.arguments = arguments
         self.pipeline = pipeline
         self.verbose = verbose
+        self.viewportWidth = arguments.config.windowWidth
+        self.viewportHeight = arguments.config.windowHeight
         super.init()
     }
 
@@ -147,11 +156,13 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
         let drawable = view.currentDrawable
         let renderPassDescriptor = view.currentRenderPassDescriptor
         let drawableAvailable = drawable != nil && renderPassDescriptor != nil
-        let frame = pipeline.stepForRendering(drawableRequested: true)
-        let descriptor = frame.drawableDescriptor.withViewport(
-            width: Swift.max(Int(view.drawableSize.width), 1),
-            height: Swift.max(Int(view.drawableSize.height), 1)
+        updateViewport(width: Int(view.drawableSize.width), height: Int(view.drawableSize.height))
+        let frame = pipeline.stepForRendering(
+            drawableRequested: true,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight
         )
+        let descriptor = frame.drawableDescriptor
         let drawableResult = pipeline.metalRenderBackend.renderDrawable(
             snapshot: frame.renderSnapshot,
             descriptor: descriptor,
@@ -178,7 +189,27 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        _ = size
+        updateViewport(width: Int(size.width), height: Int(size.height))
+    }
+
+    func handleDebugCameraControl(_ intent: DebugCameraControlIntent) {
+        let diagnosticsReport = pipeline.applyDebugCameraControl(
+            intent,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight
+        )
+        diagnostics.append(contentsOf: diagnosticsReport.messages)
+
+        if verbose {
+            let camera = pipeline.debugCamera
+            print(
+                "telluric-game-app debug camera: "
+                    + "mode \(camera.projectionMode.rawValue), "
+                    + "center \(camera.centerX),\(camera.centerZ), "
+                    + "halfZ \(camera.halfExtentZ), "
+                    + "diagnostics error \(diagnosticsReport.summary.errors)"
+            )
+        }
     }
 
     func runWithoutDrawableFallback() {
@@ -200,6 +231,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                 "telluric-game-app: Metal unavailable; opened fallback view. "
                     + "frames simulated \(frameSummaries.count), "
                     + "debug lines \(finalFrame.debugLinesExtracted), "
+                    + "camera center \(finalFrame.debugCameraCenterX),\(finalFrame.debugCameraCenterZ), "
+                    + "halfZ \(finalFrame.debugCameraHalfExtentZ), "
                     + "diagnostics info \(finalFrame.diagnosticsSummary.infos) "
                     + "warning \(finalFrame.diagnosticsSummary.warnings) "
                     + "error \(finalFrame.diagnosticsSummary.errors)"
@@ -252,6 +285,11 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
         ))
     }
 
+    private func updateViewport(width: Int, height: Int) {
+        viewportWidth = Swift.max(width, 1)
+        viewportHeight = Swift.max(height, 1)
+    }
+
     private func log(frame: GameAppFrameResult, drawableResult: MetalDrawableRenderResult) {
         guard verbose || !emittedInitialSummary || !frame.success || !drawableResult.success else {
             return
@@ -266,9 +304,76 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                 + "drawn debug lines \(drawableResult.drawnDebugLineCount), "
                 + "presented \(drawableResult.presentedDrawable), "
                 + "drawable success \(drawableResult.success), "
+                + "camera center \(frame.debugCameraState.centerX),\(frame.debugCameraState.centerZ), "
+                + "halfZ \(frame.debugCameraState.halfExtentZ), "
+                + "viewport \(frame.debugViewportWidth)x\(frame.debugViewportHeight), "
                 + "diagnostics info \(drawableResult.diagnostics.summary.infos) "
                 + "warning \(drawableResult.diagnostics.summary.warnings) "
                 + "error \(drawableResult.diagnostics.summary.errors)"
         )
+    }
+}
+
+private final class GameAppMetalView: MTKView {
+    var debugControlHandler: ((DebugCameraControlIntent) -> Void)?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if let intent = Self.intent(for: event) {
+            debugControlHandler?(intent)
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard event.scrollingDeltaY != 0 else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        debugControlHandler?(event.scrollingDeltaY > 0 ? .zoomIn : .zoomOut)
+    }
+
+    private static func intent(for event: NSEvent) -> DebugCameraControlIntent? {
+        switch event.keyCode {
+        case 123:
+            return .pan(deltaX: -1, deltaZ: 0)
+        case 124:
+            return .pan(deltaX: 1, deltaZ: 0)
+        case 125:
+            return .pan(deltaX: 0, deltaZ: -1)
+        case 126:
+            return .pan(deltaX: 0, deltaZ: 1)
+        default:
+            break
+        }
+
+        guard let character = event.charactersIgnoringModifiers?.lowercased() else {
+            return nil
+        }
+
+        switch character {
+        case "+", "=":
+            return .zoomIn
+        case "-", "_":
+            return .zoomOut
+        case "0", "r":
+            return .reset
+        case "a":
+            return .pan(deltaX: -1, deltaZ: 0)
+        case "d":
+            return .pan(deltaX: 1, deltaZ: 0)
+        case "s":
+            return .pan(deltaX: 0, deltaZ: -1)
+        case "w":
+            return .pan(deltaX: 0, deltaZ: 1)
+        default:
+            return nil
+        }
     }
 }

@@ -207,9 +207,12 @@ Responsibilities:
 - minimal macOS window and `MTKView` glue;
 - deterministic app-shell configuration;
 - stateful stepping over `TelluricGame`, `TelluricRuntime`, `TelluricRenderExtraction`, and `TelluricRenderMetal`;
-- structured diagnostics for the current no-drawable-rendering state.
+- debug-only projection/camera controls for viewing extracted chunk grids;
+- structured diagnostics for the current drawable debug-line rendering state.
 
 Phase 16 implements the first app shell. `TelluricGameAppCore` remains UI-free and testable. `TelluricGameApp` is the only target allowed to import AppKit/MetalKit. The app shell does not create an Xcode project, packaged app bundle, gameplay systems, editor UI, terrain mesh generation, asset rendering, audio, motion, or ML.
+
+Phase 20 adds debug camera/projection controls. `TelluricGameAppCore` owns UI-free camera state, projection derivation, validation, and platform-neutral control intents. `TelluricGameApp` maps AppKit keyboard/mouse events into those debug intents. This is not a gameplay camera, player controller, editor UI, or full input system.
 
 ### Audio
 
@@ -276,7 +279,7 @@ TelluricGameApp
 TelluricGameAppCore
 ```
 
-These are top-level client target boundaries only. Phase 4 implements the seed validator. Phase 10 implements the asset cooker as a manifest validation and descriptor/report tool. Phase 15 implements the headless loop as a vertical integration smoke executable over game, runtime, render extraction, Metal debug-line preparation, and persistence packaging. Phase 16 implements the minimal app shell over the same pipeline without moving engine logic into app code. Replay inspection remains future work.
+These are top-level client target boundaries only. Phase 4 implements the seed validator. Phase 10 implements the asset cooker as a manifest validation and descriptor/report tool. Phase 15 implements the headless loop as a vertical integration smoke executable over game, runtime, render extraction, Metal debug-line preparation, and persistence packaging. Phase 16 implements the minimal app shell over the same pipeline without moving engine logic into app code. Phase 20 adds debug camera/projection controls to that app shell without introducing gameplay input. Replay inspection remains future work.
 
 ## 5. Runtime loop
 
@@ -305,7 +308,7 @@ GameInputFrame
 
 This is a validation executable, not the runtime app. It creates no window, drawable, `MTKView`, app bundle, platform input layer, or gameplay system.
 
-Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. Phase 18 hardens the local safe run, bounded smoke, and diagnostics-report workflow so the user can visually verify the debug chunk grid on a Mac. The app still does not implement platform input, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
+Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. Phase 18 hardens the local safe run, bounded smoke, and diagnostics-report workflow so the user can visually verify the debug chunk grid on a Mac. Phase 20 adds debug-only camera/projection controls so the grid is centered, scaled, zoomable, pannable, and resettable without creating gameplay input. The app still does not implement player controls, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
 
 ## 6. What changed from the first attempt
 
@@ -354,8 +357,9 @@ Procedural systems testable before rendering
 17. Minimal drawable debug-line render pass
 18. Visual smoke and app run hardening
 19. ReplayInspector behavior
-20. WorldLab
-21. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+20. Debug camera / projection controls
+21. WorldLab
+22. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy
