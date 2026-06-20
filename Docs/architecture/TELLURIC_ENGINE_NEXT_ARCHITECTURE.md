@@ -270,15 +270,16 @@ Procedural systems testable before rendering
 3. Terrain/Biome baseline implementation respecting final contracts
 4. Seed validator CLI behavior
 5. Chunk streaming planner
-6. Simulation / ECS / Runtime behavior
-7. RenderSnapshot contracts
-8. Assets / AssetCooker behavior
-9. ReplayInspector behavior
-10. RenderMetal backend
-11. Runtime app thin
-12. Game layer
-13. WorldLab
-14. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+6. ECS / Simulation contracts
+7. Runtime behavior
+8. RenderSnapshot contracts
+9. Assets / AssetCooker behavior
+10. ReplayInspector behavior
+11. RenderMetal backend
+12. Runtime app thin
+13. Game layer
+14. WorldLab
+15. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

@@ -73,6 +73,16 @@ Telluric.ChunkStreamingPlan.v1
 
 The plan hash is derived from ordered streaming config, observers, request/keep/evict arrays, diagnostics, and success state. `TelluricStreaming` may use lookup structures internally in future optimizations, but final plan output and hashing must stay explicitly ordered.
 
+Phase 6 ECS and simulation contracts add:
+
+```text
+Telluric.EntitySnapshot.v1
+Telluric.SimulationSnapshot.v1
+Telluric.ReplayInputLog.v1
+```
+
+Simulation determinism depends on fixed tick order, ordered command buffers, ordered entity/component snapshots, and stable diagnostics. The same initial `SimulationWorld` plus the same ordered `ReplayInputLog` must produce the same snapshot hashes. Changing command order is a meaningful deterministic input change.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

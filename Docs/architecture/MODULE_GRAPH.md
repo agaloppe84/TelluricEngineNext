@@ -30,8 +30,15 @@ Phase 1 implements the first real foundation contracts in these four targets. Se
 
 ```text
 TelluricECS -> TelluricCore, TelluricMath, TelluricDeterminism
-TelluricSimulation -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricECS
+TelluricSimulation -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricDiagnostics, TelluricECS
 ```
+
+Phase 6 implements durable ECS and fixed-tick simulation contracts:
+
+- `TelluricECS` owns stable entity IDs, neutral components, ordered entity snapshots, and minimal sorted component storage.
+- `TelluricSimulation` owns fixed tick config, ordered input frames, engine-neutral commands, simulation snapshots, replay logs, diagnostics, and stable simulation hashes.
+
+See `Docs/architecture/SIMULATION.md`.
 
 ### World modules
 
