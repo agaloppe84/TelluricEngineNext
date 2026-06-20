@@ -77,6 +77,7 @@ TelluricPersistence -> TelluricCore, TelluricDeterminism, TelluricSimulation, Te
 TelluricRuntime -> TelluricCore, TelluricDeterminism, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
 TelluricRender -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricAssets
 TelluricRenderExtraction -> TelluricCore, TelluricDiagnostics, TelluricMath, TelluricRender, TelluricRuntime, TelluricWorld
+TelluricRenderMetal -> TelluricCore, TelluricDiagnostics, TelluricRender
 ```
 
 `TelluricRender` is backend-independent. It must not import Metal or MetalKit.
@@ -124,6 +125,16 @@ Phase 11 implements `TelluricPersistence` as the snapshot, replay, and report pa
 
 See `Docs/architecture/PERSISTENCE.md`.
 
+Phase 12 implements `TelluricRenderMetal` as the isolated Metal backend skeleton:
+
+- it is the only active target allowed to import `Metal`;
+- it attempts system-default device and command queue creation;
+- it accepts backend-neutral `RenderSnapshot` values;
+- it reports explicit unsupported diagnostics for renderable instances, texture/material binding, debug primitives, and drawable presentation;
+- it does not create an app, window, `MTKView`, render loop, runtime integration, mesh generation, asset loading, gameplay, or tools UI.
+
+See `Docs/architecture/METAL_BACKEND.md`.
+
 ### Tools CLI targets
 
 ```text
@@ -150,7 +161,6 @@ These targets remain part of the architecture but are not created in Phase 0:
 ```text
 TelluricGame
 TelluricGameApp
-TelluricRenderMetal
 TelluricSurfaces
 TelluricEcology
 TelluricAudioCore
@@ -165,7 +175,7 @@ TelluricMLTools
 TelluricWorldLab
 ```
 
-`TelluricRenderMetal` is the future Metal/MetalKit backend and is the only planned target allowed to own GPU API integration. It is intentionally not created in Phase 0.
+`TelluricRenderMetal` is now active as of Phase 12. Future backend expansions must keep Metal isolated to that target.
 
 ## 3. Guard Rules
 
@@ -174,11 +184,13 @@ Phase 0 architecture guards must fail if:
 - a source target outside the Phase 0 active target list is created;
 - Ruby/Rails markers or Ruby files appear;
 - scripts invoke unsafe global commands;
-- SwiftUI, AppKit, Metal, MetalKit, AVFoundation, CoreAudio, or GameplayKit are imported in Phase 0 sources;
+- SwiftUI, AppKit, AVFoundation, CoreAudio, or GameplayKit are imported in active sources;
+- Metal or MetalKit are imported outside `Sources/TelluricRenderMetal`;
 - deterministic/procedural modules use `random(in:)`, `UUID()`, or `Date()`;
 - engine modules import app, game, or tool modules.
 - low-level engine modules import `TelluricRenderExtraction`.
 - engine modules import `TelluricAssetCooker` or `TelluricAssetCookerCore`.
 - low-level modules import `TelluricPersistence` outside allowed runtime/persistence boundaries.
+- render contracts, runtime, or render extraction import `TelluricRenderMetal`.
 
 Phase 4 also runs a tiny repo-local seed validator smoke check from `scripts/check-architecture-guards.sh`.

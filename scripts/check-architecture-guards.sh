@@ -26,6 +26,7 @@ if [ -d Sources ]; then
     TelluricRuntime
     TelluricRender
     TelluricRenderExtraction
+    TelluricRenderMetal
     TelluricSeedValidatorCore
     TelluricSeedValidator
     TelluricAssetCookerCore
@@ -53,7 +54,6 @@ if [ -d Sources ]; then
   forbidden_phase0_targets=(
     TelluricGame
     TelluricGameApp
-    TelluricRenderMetal
     TelluricAudioTools
     TelluricMotionTools
     TelluricMLTools
@@ -67,9 +67,14 @@ if [ -d Sources ]; then
     fi
   done
 
-  if grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AppKit|Metal|MetalKit|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >/dev/null 2>&1; then
-    grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AppKit|Metal|MetalKit|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >&2
+  if grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AppKit|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >/dev/null 2>&1; then
+    grep -R -n -E "^[[:space:]]*import[[:space:]]+(SwiftUI|AppKit|AVFoundation|CoreAudio|GameplayKit)([[:space:]]|$)" Sources --include="*.swift" >&2
     fail "Phase 0 sources contain forbidden platform/UI/render/audio imports"
+  fi
+
+  if grep -R -n -E "^[[:space:]]*import[[:space:]]+(Metal|MetalKit)([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricRenderMetal" >/dev/null 2>&1; then
+    grep -R -n -E "^[[:space:]]*import[[:space:]]+(Metal|MetalKit)([[:space:]]|$)" Sources --include="*.swift" --exclude-dir="TelluricRenderMetal" >&2
+    fail "Metal imports are allowed only in Sources/TelluricRenderMetal"
   fi
 
   deterministic_dirs=(
@@ -83,6 +88,7 @@ if [ -d Sources ]; then
     Sources/TelluricRuntime
     Sources/TelluricRender
     Sources/TelluricRenderExtraction
+    Sources/TelluricRenderMetal
     Sources/TelluricAssets
     Sources/TelluricPersistence
     Sources/TelluricSeedValidatorCore
@@ -113,6 +119,7 @@ if [ -d Sources ]; then
     Sources/TelluricPersistence
     Sources/TelluricRuntime
     Sources/TelluricRender
+    Sources/TelluricRenderMetal
   )
 
   for engine_dir in "${engine_dirs[@]}"; do
@@ -139,6 +146,7 @@ if [ -d Sources ]; then
     Sources/TelluricPersistence
     Sources/TelluricRuntime
     Sources/TelluricRender
+    Sources/TelluricRenderMetal
   )
 
   for bridge_forbidden_import_dir in "${bridge_forbidden_import_dirs[@]}"; do
@@ -162,7 +170,7 @@ if find . -path ./.git -prune -o \( -name "*.rb" -o -name Rakefile -o -name conf
   fail "Ruby/Rails files are not allowed in this repo"
 fi
 
-for forbidden_package_name in TelluricGame TelluricGameApp TelluricRenderMetal TelluricAudioTools TelluricMotionTools TelluricMLTools TelluricRPGCore TelluricWorldLab; do
+for forbidden_package_name in TelluricGame TelluricGameApp TelluricAudioTools TelluricMotionTools TelluricMLTools TelluricRPGCore TelluricWorldLab; do
   if [ -f Package.swift ] && grep -n "\"$forbidden_package_name\"" Package.swift >/dev/null 2>&1; then
     fail "Package.swift contains a target not allowed in Phase 0: $forbidden_package_name"
   fi

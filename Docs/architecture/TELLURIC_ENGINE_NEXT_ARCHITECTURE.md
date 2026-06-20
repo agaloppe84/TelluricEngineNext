@@ -158,12 +158,14 @@ Phase 11 implements the first persistence behavior in `TelluricPersistence`: sna
 ```text
 TelluricRender
 TelluricRenderExtraction
+TelluricRenderMetal
 ```
 
 Responsibilities:
 
 - `TelluricRender` defines backend-independent snapshots.
 - `TelluricRenderExtraction` bridges runtime snapshots into backend-neutral render snapshots without making runtime import render.
+- `TelluricRenderMetal` owns the isolated Apple Metal backend boundary.
 
 World payloads must not contain GPU objects.
 
@@ -171,7 +173,9 @@ Phase 8 implements renderer-independent render contracts in `TelluricRender`: ne
 
 Phase 9 implements runtime render extraction in `TelluricRenderExtraction`: resident chunk debug boundaries, optional coordinate labels, optional center points and deterministic render snapshots.
 
-`TelluricRenderMetal` is the future Metal/MetalKit backend. It owns RenderGraph, pipelines, GPU resources and IVDS rendering when introduced, and is intentionally not created in Phase 0.
+Phase 12 introduces `TelluricRenderMetal` as the isolated Metal backend skeleton. It can attempt default device and command queue creation and accepts `RenderSnapshot`, but it does not create an app, window, `MTKView`, render loop, runtime integration, mesh generation, asset loading, shaders, or gameplay.
+
+Future `TelluricRenderMetal` phases may own RenderGraph, pipelines, GPU resources and IVDS rendering. Metal must remain isolated to this backend target.
 
 ### Audio
 
@@ -289,8 +293,8 @@ Procedural systems testable before rendering
 9. Runtime render extraction
 10. Assets / AssetCooker behavior
 11. Persistence / snapshot save-load contracts
-12. ReplayInspector behavior
-13. RenderMetal backend
+12. Isolated RenderMetal backend skeleton
+13. ReplayInspector behavior
 14. Runtime app thin
 15. Game layer
 16. WorldLab

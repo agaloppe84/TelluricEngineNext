@@ -38,7 +38,7 @@ Render contracts are value types. They describe what a backend may render, not h
 
 ## Metal Boundary
 
-Metal belongs in the future `TelluricRenderMetal` backend only.
+Metal belongs in `TelluricRenderMetal` only.
 
 `TelluricRender` must not import:
 
@@ -51,7 +51,9 @@ TelluricRuntime
 TelluricRenderMetal
 ```
 
-The future Metal backend may consume `RenderSnapshot`, translate resource identifiers into backend resources, and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
+Phase 12 introduces the first `TelluricRenderMetal` skeleton. It consumes `RenderSnapshot`, attempts device and command queue creation, and reports unsupported render contents explicitly. It does not draw yet, does not present a drawable, and does not create app/window/view code.
+
+Future Metal backend phases may translate resource identifiers into backend resources and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
 
 ## Render Snapshot
 
@@ -103,12 +105,23 @@ Telluric.RenderSnapshot.v1
 
 The hash includes ordered version/frame/camera fields, ordered renderable instances, and ordered debug primitives. It uses `StableHasher`, not Swift's built-in `Hasher`.
 
+## Phase 12 Metal Backend Skeleton
+
+The backend skeleton currently supports:
+
+- backend configuration;
+- Metal availability and device capability reports;
+- command queue creation when a device exists;
+- accepting `RenderSnapshot`;
+- deterministic frame results;
+- explicit unsupported diagnostics for renderable instances, texture/material binding, debug lines, debug points, debug labels, and drawable presentation.
+
+See `Docs/architecture/METAL_BACKEND.md`.
+
 ## Not Implemented In Phase 8
 
 Phase 8 does not implement:
 
-- Metal or MetalKit;
-- `TelluricRenderMetal`;
 - GPU buffers or textures;
 - shaders;
 - RenderGraph;

@@ -10,6 +10,7 @@ import TelluricMath
 import TelluricPersistence
 import TelluricRender
 import TelluricRenderExtraction
+import TelluricRenderMetal
 import TelluricRuntime
 import TelluricSeedValidatorCore
 import TelluricSimulation
@@ -29,8 +30,6 @@ final class ArchitectureImportTests: XCTestCase {
         let forbiddenImports = [
             "SwiftUI",
             "AppKit",
-            "Metal",
-            "MetalKit",
             "AVFoundation",
             "CoreAudio",
             "GameplayKit",
@@ -40,6 +39,27 @@ final class ArchitectureImportTests: XCTestCase {
             under: sources,
             containsAnyImportOf: forbiddenImports
         )
+    }
+
+    func testMetalImportsAreIsolatedToRenderMetal() throws {
+        let root = try packageRoot()
+        let sources = root.appendingPathComponent("Sources")
+
+        for sourceFile in try swiftFiles(under: sources) {
+            let relativePath = sourceFile.path.replacingOccurrences(of: root.path + "/", with: "")
+            let isRenderMetalSource = relativePath.hasPrefix("Sources/TelluricRenderMetal/")
+            let contents = try String(contentsOf: sourceFile, encoding: .utf8)
+
+            for sourceLine in contents.components(separatedBy: .newlines) {
+                let trimmedLine = sourceLine.trimmingCharacters(in: .whitespaces)
+                if trimmedLine == "import Metal" || trimmedLine == "import MetalKit" {
+                    XCTAssertTrue(
+                        isRenderMetalSource,
+                        "Forbidden Metal import found outside TelluricRenderMetal: \(sourceFile.path)"
+                    )
+                }
+            }
+        }
     }
 
     func testDeterministicAndProceduralModulesDoNotUseUnstableApis() throws {
@@ -56,6 +76,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricRender",
             "TelluricRenderExtraction",
             "TelluricPersistence",
+            "TelluricRenderMetal",
         ]
         let forbiddenTokens = [
             "random(in:",
@@ -86,6 +107,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricPersistence",
             "TelluricRuntime",
             "TelluricRender",
+            "TelluricRenderMetal",
         ]
 
         for moduleName in moduleNames {
@@ -112,6 +134,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricRuntime",
             "TelluricRender",
             "TelluricRenderExtraction",
+            "TelluricRenderMetal",
         ]
 
         for moduleName in moduleNames {
@@ -139,6 +162,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricAssets",
             "TelluricRender",
             "TelluricRenderExtraction",
+            "TelluricRenderMetal",
         ]
 
         for moduleName in moduleNames {
