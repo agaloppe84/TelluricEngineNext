@@ -4,6 +4,7 @@ Phase 16 creates the first minimal macOS app shell for Telluric Engine Next.
 Phase 17 adds the first drawable debug-line render pass.
 Phase 18 hardens the local app run and visual smoke workflow.
 Phase 20 adds debug-only camera and projection controls for viewing the chunk grid.
+Phase 21 adds debug visual polish layers and quieter app-run logging.
 
 This is a SwiftPM executable host, not a traditional Xcode project or packaged app bundle. It exists to prove that the existing engine/game/runtime/render-extraction/Metal-preparation pipeline can be hosted visually without moving engine behavior into UI code.
 
@@ -56,6 +57,32 @@ The app currently shows a clear background plus flat chunk boundary debug lines.
 
 When Metal and a drawable are available, the app submits those debug lines through `TelluricRenderMetal` and reports attempted/succeeded draw calls. When Metal is unavailable, the app reports that state clearly and the no-window smoke path remains valid.
 
+Phase 21 uses line-only debug primitives for visual polish because `DebugLine` rendering is the only confirmed drawable path. It does not rely on debug points or labels for essential visuals.
+
+## Visual Layers
+
+The app-shell default debug view enables:
+
+- resident chunk boundaries;
+- world X/Z axes;
+- world origin marker;
+- central chunk highlight for chunk `(0, 0)`;
+- current streaming footprint outline.
+
+Optional chunk center crosses are available but disabled by default to keep the radius 1 view readable.
+
+Default colors are deterministic backend-neutral `RenderColor` values:
+
+- chunk boundaries: neutral gray;
+- X axis: red;
+- Z axis: blue;
+- origin marker: bright yellow;
+- central chunk: green accent;
+- streaming bounds: purple accent;
+- optional chunk centers: pale blue.
+
+For a radius 1 / chunk size 16 run, the default line set increases from the earlier 36 chunk-boundary lines to 48 total debug lines.
+
 ## Debug Camera
 
 Phase 20 adds a UI-free debug camera model in `TelluricGameAppCore`:
@@ -84,6 +111,13 @@ Current controls:
 - arrow keys: pan;
 - `W`, `A`, `S`, `D`: pan;
 - `0` or `R`: reset/focus the debug grid;
+- `G`: toggle chunk boundaries;
+- `X`: toggle world axes;
+- `O`: toggle origin marker;
+- `C`: toggle chunk center crosses;
+- `H`: toggle central chunk highlight;
+- `B`: toggle streaming radius bounds;
+- `V`: toggle verbose frame logging;
 - mouse wheel: zoom.
 
 These controls are debug visualization controls only. They do not create a player controller, gameplay camera, editor UI, or general input system.
@@ -103,6 +137,7 @@ To open the minimal window from a local macOS shell:
 ./scripts/game-app-safe.sh --run --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8
 ./scripts/game-app-safe.sh --run --diagnostics-report Tools/benchmarks/game_app_visual_report.json
 ./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_camera_report.json
+./scripts/game-app-safe.sh --run --frames 120 --seed 12345 --radius 1 --chunk-size 16 --vertical-scale 8 --diagnostics-report Tools/benchmarks/game_app_visual_polish_report.json
 ```
 
 The wrapper pins SwiftPM scratch, cache, config, security, home, and module-cache paths under `.build/`. Raw `swift run` can use user-level SwiftPM cache and configuration paths, so wrappers are preferred for Codex and validation work.
@@ -122,9 +157,12 @@ The report contains:
 - Metal availability and command queue capability;
 - `MTKView` and drawable availability when known;
 - final debug line and vertex counts;
+- final drawn debug line and vertex counts;
+- enabled debug visual layers;
 - attempted and successful draw call counts;
 - final debug camera center and half extent;
 - final debug projection extents, mode, and viewport size;
+- first warning or error, when present;
 - ordered frame summaries;
 - ordered diagnostics and severity counts;
 - success state.
@@ -148,3 +186,5 @@ Phase 16 does not implement:
 Phase 17 adds drawable debug-line rendering only. It still does not implement terrain rendering, materials, textures, asset loading, camera controls, player controls, or editor UI.
 
 Phase 20 adds debug camera controls only. It still does not implement a gameplay camera, player input, terrain mesh rendering, asset rendering, editor UI, or a full input system.
+
+Phase 21 adds debug visual polish only. It still does not implement terrain meshes, material or texture rendering, GPU text labels, editor UI, gameplay controls, or asset rendering.

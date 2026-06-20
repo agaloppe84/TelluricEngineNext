@@ -82,9 +82,9 @@ final class HeadlessLoopTests: XCTestCase {
         let report = HeadlessLoopRunner().validate(arguments: makeArguments(seed: 1, radius: 1, ticks: 1))
 
         XCTAssertTrue(report.success)
-        XCTAssertEqual(report.finalPreparedDebugLineCount, 36)
-        XCTAssertEqual(report.finalPreparedDebugLineVertexCount, 72)
-        XCTAssertEqual(report.tickSummaries.last?.preparedDebugLineCount, 36)
+        XCTAssertEqual(report.finalPreparedDebugLineCount, 48)
+        XCTAssertEqual(report.finalPreparedDebugLineVertexCount, 96)
+        XCTAssertEqual(report.tickSummaries.last?.preparedDebugLineCount, 48)
     }
 
     func testHeadlessLoopSucceedsWithMetalUnavailableOrAvailable() {

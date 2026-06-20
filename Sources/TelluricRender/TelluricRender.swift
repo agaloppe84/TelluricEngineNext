@@ -333,6 +333,27 @@ public struct RenderColor: Codable, Equatable, Hashable, Sendable, StableHashabl
     public static let green = RenderColor(red: 0, green: 1, blue: 0, alpha: 1)
     public static let blue = RenderColor(red: 0, green: 0, blue: 1, alpha: 1)
 
+    /// Neutral chunk boundary color for debug grid rendering.
+    public static let debugChunkBoundary = RenderColor(red: 0.46, green: 0.50, blue: 0.56, alpha: 1)
+
+    /// Red X-axis color for debug grid rendering.
+    public static let debugXAxis = RenderColor(red: 1.0, green: 0.18, blue: 0.12, alpha: 1)
+
+    /// Blue Z-axis color for debug grid rendering.
+    public static let debugZAxis = RenderColor(red: 0.12, green: 0.48, blue: 1.0, alpha: 1)
+
+    /// Bright origin marker color for debug grid rendering.
+    public static let debugOrigin = RenderColor(red: 1.0, green: 0.92, blue: 0.20, alpha: 1)
+
+    /// Chunk center marker color for optional debug grid crosses.
+    public static let debugChunkCenter = RenderColor(red: 0.86, green: 0.90, blue: 1.0, alpha: 1)
+
+    /// Accent color for the world-origin chunk boundary.
+    public static let debugCentralChunk = RenderColor(red: 0.30, green: 1.0, blue: 0.44, alpha: 1)
+
+    /// Secondary color for the current streaming radius footprint.
+    public static let debugStreamingRadius = RenderColor(red: 0.74, green: 0.48, blue: 1.0, alpha: 1)
+
     public func stableHash(into hasher: inout StableHasher) {
         hasher.combine(red)
         hasher.combine(green)

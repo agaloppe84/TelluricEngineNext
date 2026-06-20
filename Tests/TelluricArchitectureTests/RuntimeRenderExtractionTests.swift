@@ -37,6 +37,122 @@ final class RuntimeRenderExtractionTests: XCTestCase {
         XCTAssertEqual(result.renderSnapshot.debugLabels.count, 9)
     }
 
+    func testDefaultDebugVisualOptionsAddDeterministicPolishLines() {
+        let config = RuntimeRenderExtractionConfig(camera: makeCamera())
+        let result = RuntimeRenderExtractor().extract(
+            from: runtimeSnapshot(radius: 1),
+            config: config
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertTrue(config.includeChunkBoundaryLines)
+        XCTAssertTrue(config.includeWorldAxes)
+        XCTAssertTrue(config.includeOriginMarker)
+        XCTAssertFalse(config.includeChunkCenterCrosses)
+        XCTAssertTrue(config.includeCentralChunkHighlight)
+        XCTAssertTrue(config.includeStreamingRadiusBounds)
+        XCTAssertEqual(result.renderSnapshot.debugLines.count, 48)
+        XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugXAxis })
+        XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugZAxis })
+        XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugOrigin })
+        XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugCentralChunk })
+        XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugStreamingRadius })
+    }
+
+    func testTogglingAxesChangesRenderSnapshotHashAndLineCount() {
+        let snapshot = runtimeSnapshot(radius: 1)
+        let defaultResult = RuntimeRenderExtractor().extract(
+            from: snapshot,
+            config: RuntimeRenderExtractionConfig(camera: makeCamera())
+        )
+        let noAxesResult = RuntimeRenderExtractor().extract(
+            from: snapshot,
+            config: RuntimeRenderExtractionConfig(camera: makeCamera(), includeWorldAxes: false)
+        )
+
+        XCTAssertEqual(defaultResult.renderSnapshot.debugLines.count, 48)
+        XCTAssertEqual(noAxesResult.renderSnapshot.debugLines.count, 46)
+        XCTAssertNotEqual(defaultResult.renderSnapshot.stableHash, noAxesResult.renderSnapshot.stableHash)
+    }
+
+    func testDisablingGridLeavesAxesAndOriginWhenEnabled() {
+        let result = RuntimeRenderExtractor().extract(
+            from: runtimeSnapshot(radius: 1),
+            config: RuntimeRenderExtractionConfig(
+                camera: makeCamera(),
+                includeChunkBoundaryLines: false,
+                includeWorldAxes: true,
+                includeOriginMarker: true,
+                includeCentralChunkHighlight: false,
+                includeStreamingRadiusBounds: false
+            )
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.renderSnapshot.debugLines.count, 4)
+        XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugXAxis })
+        XCTAssertTrue(result.renderSnapshot.debugLines.contains { $0.color == .debugZAxis })
+        XCTAssertEqual(result.renderSnapshot.debugLines.filter { $0.color == .debugOrigin }.count, 2)
+    }
+
+    func testCentralChunkHighlightAddsAccentBoundaryLines() {
+        let withoutHighlight = RuntimeRenderExtractor().extract(
+            from: runtimeSnapshot(radius: 1),
+            config: RuntimeRenderExtractionConfig(
+                camera: makeCamera(),
+                includeChunkBoundaryLines: false,
+                includeWorldAxes: false,
+                includeOriginMarker: false,
+                includeCentralChunkHighlight: false,
+                includeStreamingRadiusBounds: false
+            )
+        )
+        let withHighlight = RuntimeRenderExtractor().extract(
+            from: runtimeSnapshot(radius: 1),
+            config: RuntimeRenderExtractionConfig(
+                camera: makeCamera(),
+                includeChunkBoundaryLines: false,
+                includeWorldAxes: false,
+                includeOriginMarker: false,
+                includeCentralChunkHighlight: true,
+                includeStreamingRadiusBounds: false
+            )
+        )
+
+        XCTAssertEqual(withoutHighlight.renderSnapshot.debugLines.count, 0)
+        XCTAssertEqual(withHighlight.renderSnapshot.debugLines.count, 4)
+        XCTAssertTrue(withHighlight.renderSnapshot.debugLines.allSatisfy { $0.color == .debugCentralChunk })
+    }
+
+    func testChunkCenterCrossesAddDeterministicLineMarkers() {
+        let result = RuntimeRenderExtractor().extract(
+            from: runtimeSnapshot(radius: 1),
+            config: RuntimeRenderExtractionConfig(
+                camera: makeCamera(),
+                includeChunkBoundaryLines: false,
+                includeWorldAxes: false,
+                includeOriginMarker: false,
+                includeChunkCenterCrosses: true,
+                includeCentralChunkHighlight: false,
+                includeStreamingRadiusBounds: false
+            )
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.renderSnapshot.debugLines.count, 18)
+        XCTAssertTrue(result.renderSnapshot.debugLines.allSatisfy { $0.color == .debugChunkCenter })
+        XCTAssertEqual(result.renderSnapshot.debugLines, result.renderSnapshot.debugLines.sorted())
+    }
+
+    func testDebugVisualColorsAreFixed() {
+        XCTAssertEqual(RenderColor.debugChunkBoundary, RenderColor(red: 0.46, green: 0.50, blue: 0.56, alpha: 1))
+        XCTAssertEqual(RenderColor.debugXAxis, RenderColor(red: 1.0, green: 0.18, blue: 0.12, alpha: 1))
+        XCTAssertEqual(RenderColor.debugZAxis, RenderColor(red: 0.12, green: 0.48, blue: 1.0, alpha: 1))
+        XCTAssertEqual(RenderColor.debugOrigin, RenderColor(red: 1.0, green: 0.92, blue: 0.20, alpha: 1))
+        XCTAssertEqual(RenderColor.debugCentralChunk, RenderColor(red: 0.30, green: 1.0, blue: 0.44, alpha: 1))
+        XCTAssertEqual(RenderColor.debugStreamingRadius, RenderColor(red: 0.74, green: 0.48, blue: 1.0, alpha: 1))
+    }
+
     func testSameRuntimeSnapshotProducesSameRenderSnapshotHash() {
         let snapshot = runtimeSnapshot(radius: 1)
         let config = makeExtractionConfig(includeLabels: true, includeCenterPoints: true)
@@ -224,23 +340,32 @@ final class RuntimeRenderExtractionTests: XCTestCase {
         includeCenterPoints: Bool = false
     ) -> RuntimeRenderExtractionConfig {
         RuntimeRenderExtractionConfig(
-            camera: CameraSnapshot(
-                id: NamespaceID("render.camera.extraction.tests"),
-                transform: Transform(
-                    translation: Float3(x: 0, y: 48, z: -48),
-                    rotationRadians: Float3(x: 0.7, y: 0, z: 0),
-                    scale: .one
-                ),
-                projection: .perspective(
-                    verticalFieldOfViewRadians: 1,
-                    nearClip: 0.1,
-                    farClip: 1_000
-                ),
-                aspectRatio: 16 / 9
-            ),
+            camera: makeCamera(),
             includeChunkLabels: includeLabels,
             includeChunkCenterPoints: includeCenterPoints,
+            includeWorldAxes: false,
+            includeOriginMarker: false,
+            includeChunkCenterCrosses: false,
+            includeCentralChunkHighlight: false,
+            includeStreamingRadiusBounds: false,
             boundaryColor: .white
+        )
+    }
+
+    private func makeCamera() -> CameraSnapshot {
+        CameraSnapshot(
+            id: NamespaceID("render.camera.extraction.tests"),
+            transform: Transform(
+                translation: Float3(x: 0, y: 48, z: -48),
+                rotationRadians: Float3(x: 0.7, y: 0, z: 0),
+                scale: .one
+            ),
+            projection: .perspective(
+                verticalFieldOfViewRadians: 1,
+                nearClip: 0.1,
+                farClip: 1_000
+            ),
+            aspectRatio: 16 / 9
         )
     }
 

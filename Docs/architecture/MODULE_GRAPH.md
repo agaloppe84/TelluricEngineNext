@@ -155,6 +155,7 @@ Phase 16 implements `TelluricGameApp` as the first minimal macOS app shell:
 - Phase 17 adds drawable debug-line rendering for extracted chunk boundaries when a live Metal drawable is supplied;
 - Phase 18 adds bounded safe run/smoke options and JSON diagnostics reports without changing engine dependency direction;
 - Phase 20 adds debug-only camera/projection contracts in `TelluricGameAppCore` and AppKit-only keyboard/mouse event glue in `TelluricGameApp`;
+- Phase 21 adds backend-neutral debug visual layer options, fixed debug colors, app-shell toggles, and quieter frame logging;
 - engine modules, runtime, game, render extraction, and render contracts must not import app-shell targets.
 
 See `Docs/architecture/GAME_APP_SHELL.md`.

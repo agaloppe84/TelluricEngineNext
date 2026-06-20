@@ -277,6 +277,24 @@ final class MetalBackendTests: XCTestCase {
         XCTAssertTrue(diagnosticCodes.contains("render.metal.unsupported.debug_labels"))
     }
 
+    func testRenderingPolishedDebugLinesPreparesEveryProducedLine() {
+        let backend = MetalRenderBackend()
+        let lines = [
+            DebugLine(start: Float3(x: -16, y: 0, z: 0), end: Float3(x: 32, y: 0, z: 0), color: .debugXAxis),
+            DebugLine(start: Float3(x: 0, y: 0, z: -16), end: Float3(x: 0, y: 0, z: 32), color: .debugZAxis),
+            DebugLine(start: Float3(x: -2, y: 0, z: 0), end: Float3(x: 2, y: 0, z: 0), color: .debugOrigin),
+            DebugLine(start: Float3(x: 0, y: 0, z: -2), end: Float3(x: 0, y: 0, z: 2), color: .debugOrigin),
+            DebugLine(start: Float3(x: 0, y: 0, z: 0), end: Float3(x: 16, y: 0, z: 0), color: .debugCentralChunk),
+        ]
+        let snapshot = makeSnapshot(debugLines: lines)
+
+        let result = backend.render(snapshot: snapshot)
+
+        XCTAssertEqual(result.preparedDebugLineCount, lines.count)
+        XCTAssertEqual(result.preparedDebugLineVertexCount, lines.count * 2)
+        XCTAssertEqual(result.unsupportedDebugLineCount, 0)
+    }
+
     func testDrawablePresentationRequestReturnsUnsupportedDiagnostic() {
         let backend = MetalRenderBackend()
         let snapshot = makeSnapshot()

@@ -5,6 +5,7 @@ Phase 13 adds the first backend-level debug line preparation path.
 Phase 17 adds the first minimal drawable debug-line render pass.
 Phase 18 hardens app-shell visual smoke reporting around that drawable path.
 Phase 20 feeds the drawable pass with app-shell debug camera projection controls.
+Phase 21 improves the debug line set and colors without changing the backend boundary.
 
 This is the backend boundary for rendering. It is not an app, not a window, not an `MTKView`, not a render loop, not terrain mesh generation, not runtime integration, and not gameplay.
 
@@ -117,6 +118,8 @@ It uses:
 
 The pass clears the drawable and draws line primitives. It does not interpret `CameraSnapshot` yet; the top-down projection is explicitly debug-only so chunk grids are visible before terrain/camera rendering exists.
 
+Phase 21 does not require new Metal primitives. Axes, origin markers, chunk center crosses, central chunk highlights, and radius outlines are all `DebugLine` values. The backend preserves their positions and colors through the existing vertex format and shader path.
+
 Phase 20 keeps the projection split clean:
 
 - `TelluricGameAppCore` owns UI-free debug camera state and validation;
@@ -201,3 +204,5 @@ Phase 17 does not implement:
 Phase 17 implements visible debug line drawing only when the app supplies a live Metal drawable.
 
 Phase 20 implements debug camera/projection controls only. It does not implement a gameplay camera, input device system, terrain rendering, asset rendering, debug labels/points, editor UI, or camera controls inside the Metal backend.
+
+Phase 21 keeps debug points and labels unsupported in the drawable path. Essential visual polish is line-based until a later backend phase implements point or text rendering.

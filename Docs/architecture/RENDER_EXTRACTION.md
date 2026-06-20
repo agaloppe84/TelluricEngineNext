@@ -46,9 +46,21 @@ For each resident runtime chunk, extraction can produce:
 - one optional `DebugLabel` with chunk coordinates;
 - one optional `DebugPoint` at the chunk center.
 
+Phase 21 extends this line-based debug output with optional visual layers:
+
+- world X/Z axis lines;
+- a small line cross at world origin;
+- optional resident chunk center line crosses;
+- accent boundary lines around chunk `(0, 0)`;
+- a secondary outline around the current resident streaming footprint.
+
 Chunk debug boundaries use the runtime world config chunk size and `ChunkCoord.x/z`. The lines are emitted in world coordinates on a flat configurable y plane, defaulting to `y = 0`.
 
 These lines are debug visualization contracts. They are not terrain meshes, collision geometry, GPU buffers, material assignments, or biome rendering.
+
+The default visual layer set uses deterministic backend-neutral colors from `TelluricRender`: neutral chunk boundaries, red X axis, blue Z axis, yellow origin marker, green central chunk highlight, purple streaming bounds, and pale-blue optional center crosses. No colors are random or asset-driven.
+
+A radius 1 / chunk size 16 resident grid now produces 48 default debug lines: 36 chunk-boundary lines, 2 axis lines, 2 origin-marker lines, 4 central chunk accent lines, and 4 streaming-footprint lines. Optional chunk center crosses add 2 lines per resident chunk.
 
 Negative chunk coordinates use the same integer chunk coordinate assumptions as streaming and world contracts. Extreme coordinates that overflow integer footprint calculation are reported as diagnostics.
 
@@ -57,6 +69,8 @@ Negative chunk coordinates use the same integer chunk coordinate assumptions as 
 Extraction iterates resident chunk records in deterministic chunk-coordinate order. `RenderSnapshot` then canonicalizes debug lines, points, and labels before hashing.
 
 The extraction path must not depend on dictionary or set iteration order, system randomness, wall-clock time, or Swift's built-in `Hasher`.
+
+Layer toggles alter the ordered debug primitive set and therefore intentionally alter the render snapshot hash. This is useful for deterministic visual debugging and report comparison.
 
 ## Camera Boundary
 
@@ -99,3 +113,5 @@ Phase 9 does not implement:
 - gameplay cameras;
 - tools UI;
 - audio, motion, or ML.
+
+Phase 21 still does not implement GPU text labels or point drawing in Metal. Essential polish uses `DebugLine` primitives because those are currently rendered by the backend.

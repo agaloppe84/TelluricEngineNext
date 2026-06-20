@@ -55,6 +55,8 @@ Phase 12 introduced the first `TelluricRenderMetal` skeleton. Phase 13 adds back
 
 Phase 20 adds debug camera/projection control in the app-shell layer. `TelluricRender` remains unchanged as a backend-neutral contract module; it still does not know about AppKit events, keyboard controls, mouse wheels, or Metal uniforms.
 
+Phase 21 adds fixed debug visualization colors in `RenderColor` for chunk boundaries, axes, origin marker, central chunk highlight, streaming bounds, and optional chunk centers. These are backend-neutral color constants, not materials or assets.
+
 Future Metal backend phases may translate resource identifiers into backend resources and own GPU lifetime, RenderGraph execution, command encoding, captures, debug markers, and profiling.
 
 ## Render Snapshot
@@ -99,6 +101,8 @@ They are backend-neutral and suitable for future chunk boundary, residency, simu
 
 Runtime render extraction uses these primitives for flat chunk footprint visualization. The lines are debug contracts only; they are not terrain meshes and do not carry backend material, shader, or GPU resource state.
 
+The polished debug grid remains line-based. World axes, origin marker, central chunk highlight, streaming bounds, and optional center crosses are all represented as `DebugLine` values so they work with the current Metal debug line pipeline.
+
 ## Render Hashing
 
 Render snapshots use:
@@ -126,6 +130,8 @@ The backend skeleton currently supports:
 Debug line drawing is still a debug visualization path only. It uses a simple backend-owned top-down orthographic projection for chunk footprint lines. There is still no terrain mesh rendering, material system, texture loading, asset rendering, gameplay camera, or render graph.
 
 Phase 20 makes that top-down projection controllable from the app shell: the default view fits the generated chunk grid, viewport aspect is accounted for, zoom and pan adjust only debug visualization state, and reset refocuses the grid.
+
+Phase 21 makes the default debug grid easier to read, but it does not add terrain rendering, mesh generation, GPU text labels, material systems, or asset rendering.
 
 See `Docs/architecture/METAL_BACKEND.md`.
 

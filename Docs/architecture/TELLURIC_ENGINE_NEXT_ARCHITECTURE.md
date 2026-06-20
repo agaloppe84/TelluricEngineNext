@@ -214,6 +214,8 @@ Phase 16 implements the first app shell. `TelluricGameAppCore` remains UI-free a
 
 Phase 20 adds debug camera/projection controls. `TelluricGameAppCore` owns UI-free camera state, projection derivation, validation, and platform-neutral control intents. `TelluricGameApp` maps AppKit keyboard/mouse events into those debug intents. This is not a gameplay camera, player controller, editor UI, or full input system.
 
+Phase 21 adds debug visual polish. `TelluricRenderExtraction` emits line-based axes, origin marker, central chunk highlight, optional center crosses, and streaming footprint outlines. `TelluricGameAppCore` owns visual layer toggles and logging options, while `TelluricGameApp` owns only keyboard glue. This remains debug visualization, not terrain rendering or gameplay.
+
 ### Audio
 
 ```text
@@ -308,7 +310,7 @@ GameInputFrame
 
 This is a validation executable, not the runtime app. It creates no window, drawable, `MTKView`, app bundle, platform input layer, or gameplay system.
 
-Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. Phase 18 hardens the local safe run, bounded smoke, and diagnostics-report workflow so the user can visually verify the debug chunk grid on a Mac. Phase 20 adds debug-only camera/projection controls so the grid is centered, scaled, zoomable, pannable, and resettable without creating gameplay input. The app still does not implement player controls, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
+Phase 16 adds the minimal macOS app shell above the same pipeline. Phase 17 adds drawable debug-line rendering for extracted chunk boundary lines. Phase 18 hardens the local safe run, bounded smoke, and diagnostics-report workflow so the user can visually verify the debug chunk grid on a Mac. Phase 20 adds debug-only camera/projection controls so the grid is centered, scaled, zoomable, pannable, and resettable without creating gameplay input. Phase 21 adds line-based visual polish layers and quieter logging. The app still does not implement player controls, gameplay systems, terrain mesh rendering, asset rendering, or editor UI.
 
 ## 6. What changed from the first attempt
 
@@ -358,8 +360,9 @@ Procedural systems testable before rendering
 18. Visual smoke and app run hardening
 19. ReplayInspector behavior
 20. Debug camera / projection controls
-21. WorldLab
-22. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+21. Debug visual polish
+22. WorldLab
+23. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

@@ -59,6 +59,8 @@ The game input is deterministic and ordered. Tick `0` spawns one controllable en
 
 The report intentionally excludes wall-clock timestamps and performance timing. It uses ordered arrays rather than dictionaries for stable output.
 
+Because the tool uses the shared render extraction defaults, radius 1 / chunk size 16 now prepares the polished debug grid line set: chunk boundaries, X/Z axes, origin marker, central chunk highlight, and streaming footprint outline.
+
 ## Metal Behavior
 
 The tool imports `TelluricRenderMetal` as a top-level client. It does not import `Metal` directly.

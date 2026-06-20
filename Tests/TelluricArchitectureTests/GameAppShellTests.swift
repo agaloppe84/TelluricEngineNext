@@ -58,6 +58,12 @@ final class GameAppShellTests: XCTestCase {
             "--run",
             "--frames", "120",
             "--diagnostics-report", "Tools/benchmarks/game_app_visual_report.json",
+            "--quiet",
+            "--log-every", "30",
+            "--hide-axes",
+            "--hide-origin",
+            "--show-centers",
+            "--hide-central-highlight",
         ])
 
         XCTAssertFalse(arguments.dryRun)
@@ -66,6 +72,13 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(arguments.frameLimit, 120)
         XCTAssertEqual(arguments.mode, .run)
         XCTAssertEqual(arguments.diagnosticsReportPath, "Tools/benchmarks/game_app_visual_report.json")
+        XCTAssertTrue(arguments.quiet)
+        XCTAssertFalse(arguments.verbose)
+        XCTAssertEqual(arguments.logEvery, 30)
+        XCTAssertFalse(arguments.debugVisualOptions.showWorldAxes)
+        XCTAssertFalse(arguments.debugVisualOptions.showOriginMarker)
+        XCTAssertTrue(arguments.debugVisualOptions.showChunkCenters)
+        XCTAssertFalse(arguments.debugVisualOptions.showCentralChunkHighlight)
     }
 
     func testArgumentParserRejectsInvalidFrames() {
@@ -73,6 +86,15 @@ final class GameAppShellTests: XCTestCase {
             XCTAssertEqual(
                 error as? GameAppArgumentError,
                 .invalidValue(option: "--frames", value: "0", reason: "Expected a positive integer.")
+            )
+        }
+    }
+
+    func testArgumentParserRejectsInvalidLogEvery() {
+        XCTAssertThrowsError(try GameAppArgumentParser.parse(["--log-every", "0"])) { error in
+            XCTAssertEqual(
+                error as? GameAppArgumentError,
+                .invalidValue(option: "--log-every", value: "0", reason: "Expected a positive integer.")
             )
         }
     }
@@ -91,6 +113,25 @@ final class GameAppShellTests: XCTestCase {
         let decoded = try JSONDecoder().decode(DebugCameraConfig.self, from: data)
 
         XCTAssertEqual(decoded, config)
+    }
+
+    func testDefaultDebugVisualOptions() throws {
+        let options = DebugVisualOptions.default
+
+        XCTAssertTrue(options.showChunkBoundaries)
+        XCTAssertTrue(options.showWorldAxes)
+        XCTAssertTrue(options.showOriginMarker)
+        XCTAssertFalse(options.showChunkCenters)
+        XCTAssertTrue(options.showCentralChunkHighlight)
+        XCTAssertTrue(options.showStreamingRadiusBounds)
+        XCTAssertEqual(options.enabledLayerNames, [
+            "chunkBoundaries",
+            "worldAxes",
+            "originMarker",
+            "centralChunkHighlight",
+            "streamingRadiusBounds",
+        ])
+        XCTAssertEqual(try roundTrip(options), options)
     }
 
     func testDefaultDebugCameraFramesRadiusOneChunkGrid() {
@@ -170,10 +211,11 @@ final class GameAppShellTests: XCTestCase {
         let result = pipeline.step()
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(result.preparedDebugLineCount, 4)
-        XCTAssertEqual(result.preparedDebugLineVertexCount, 8)
+        XCTAssertEqual(result.preparedDebugLineCount, 16)
+        XCTAssertEqual(result.preparedDebugLineVertexCount, 32)
         XCTAssertFalse(result.drawableRenderingImplemented)
         XCTAssertEqual(result.diagnosticsSummary.errors, 0)
+        XCTAssertEqual(result.debugVisualOptions, .default)
     }
 
     func testPipelineCanProduceRenderableFrameWithoutOpeningWindow() throws {
@@ -186,8 +228,8 @@ final class GameAppShellTests: XCTestCase {
 
         let frame = pipeline.stepForRendering()
 
-        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 4)
-        XCTAssertEqual(frame.renderSnapshot.debugLines.count, 4)
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 16)
+        XCTAssertEqual(frame.renderSnapshot.debugLines.count, 16)
         XCTAssertEqual(frame.drawableDescriptor.frameIndex, frame.frameResult.runtimeFrameIndex)
         XCTAssertEqual(frame.drawableDescriptor.viewportWidth, 1280)
         XCTAssertEqual(frame.drawableDescriptor.viewportHeight, 720)
@@ -233,6 +275,47 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertLessThan(pipeline.debugCamera.halfExtentZ, DebugCameraState.focused(appConfig: pipeline.config).halfExtentZ)
     }
 
+    func testAppShellVisualTogglesDoNotMutateRuntimeStateDirectly() throws {
+        var pipeline = try GameAppPipeline(config: GameAppConfig(
+            seed: 1,
+            radius: 1,
+            chunkSize: 16,
+            verticalScale: 8
+        ))
+        let beforeHash = pipeline.snapshot().stableHash
+
+        let diagnostics = pipeline.applyDebugCameraControl(.toggleWorldAxes)
+        let afterHash = pipeline.snapshot().stableHash
+        let frame = pipeline.stepForRendering()
+
+        XCTAssertFalse(diagnostics.hasErrors)
+        XCTAssertEqual(beforeHash, afterHash)
+        XCTAssertFalse(pipeline.debugVisualLayers.showWorldAxes)
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 46)
+    }
+
+    func testPipelineCanDisableGridButKeepAxesAndOrigin() throws {
+        var pipeline = try GameAppPipeline(
+            config: GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8),
+            debugVisualOptions: DebugVisualOptions(
+                showChunkBoundaries: false,
+                showWorldAxes: true,
+                showOriginMarker: true,
+                showChunkCenters: false,
+                showCentralChunkHighlight: false,
+                showStreamingRadiusBounds: false
+            )
+        )
+
+        let frame = pipeline.stepForRendering()
+
+        XCTAssertEqual(frame.frameResult.preparedDebugLineCount, 4)
+        XCTAssertEqual(frame.renderSnapshot.debugLines.count, 4)
+        XCTAssertTrue(frame.renderSnapshot.debugLines.contains { $0.color == .debugXAxis })
+        XCTAssertTrue(frame.renderSnapshot.debugLines.contains { $0.color == .debugZAxis })
+        XCTAssertEqual(frame.renderSnapshot.debugLines.filter { $0.color == .debugOrigin }.count, 2)
+    }
+
     func testDryRunUsesExistingPipelineWithoutWindow() throws {
         let result = try GameAppRuntime.dryRun(arguments: GameAppArguments(
             config: GameAppConfig(seed: 1, radius: 1, chunkSize: 16, verticalScale: 8),
@@ -244,7 +327,7 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(result.mode, .dryRun)
         XCTAssertEqual(result.framesRequested, 2)
         XCTAssertEqual(result.frames.count, 2)
-        XCTAssertEqual(result.frames.last?.preparedDebugLineCount, 36)
+        XCTAssertEqual(result.frames.last?.preparedDebugLineCount, 48)
         XCTAssertEqual(result.diagnosticsSummary.errors, 0)
     }
 
@@ -277,8 +360,12 @@ final class GameAppShellTests: XCTestCase {
         XCTAssertEqual(decoded.framesRequested, 1)
         XCTAssertEqual(decoded.framesSimulated, 1)
         XCTAssertEqual(decoded.framesRendered, 0)
-        XCTAssertEqual(decoded.debugLinesExtracted, 4)
-        XCTAssertEqual(decoded.debugVerticesPrepared, 8)
+        XCTAssertEqual(decoded.debugLinesExtracted, 16)
+        XCTAssertEqual(decoded.debugVerticesPrepared, 32)
+        XCTAssertEqual(decoded.drawnDebugLines, 0)
+        XCTAssertEqual(decoded.drawnDebugLineVertices, 0)
+        XCTAssertEqual(decoded.debugVisualOptions, .default)
+        XCTAssertEqual(decoded.debugVisualLayersEnabled, DebugVisualOptions.default.enabledLayerNames)
         XCTAssertEqual(decoded.debugProjectionMode, .topDownOrthographic)
         XCTAssertEqual(decoded.debugCameraCenterX, 8)
         XCTAssertEqual(decoded.debugCameraCenterZ, 8)
@@ -383,5 +470,10 @@ final class GameAppShellTests: XCTestCase {
         }
 
         return files.sorted { $0.path < $1.path }
+    }
+
+    private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
+        let data = try JSONEncoder().encode(value)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 }

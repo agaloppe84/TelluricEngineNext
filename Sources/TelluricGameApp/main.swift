@@ -29,7 +29,10 @@ enum TelluricGameAppMain {
                 Darwin.exit(result.success ? EXIT_SUCCESS : EXIT_FAILURE)
             }
 
-            let pipeline = try GameAppPipeline(config: arguments.config)
+            let pipeline = try GameAppPipeline(
+                config: arguments.config,
+                debugVisualOptions: arguments.debugVisualOptions
+            )
             let delegate = GameAppDelegate(arguments: arguments, pipeline: pipeline)
             let app = NSApplication.shared
             app.setActivationPolicy(.regular)
@@ -94,6 +97,7 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        loopDriver?.logFinalSummaryIfNeeded()
         loopDriver?.writeReportIfRequested()
     }
 
@@ -114,6 +118,9 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
             view.debugControlHandler = { [weak loopDriver] intent in
                 loopDriver?.handleDebugCameraControl(intent)
             }
+            view.verboseToggleHandler = { [weak loopDriver] in
+                loopDriver?.toggleVerboseFrameLogging()
+            }
             loopDriver.setMTKViewAvailable(true)
             return view
         }
@@ -129,11 +136,14 @@ private final class GameAppDelegate: NSObject, NSApplicationDelegate {
 private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
     private let arguments: GameAppArguments
     private var pipeline: GameAppPipeline
-    private let verbose: Bool
+    private var verboseFrameLogging: Bool
+    private let quiet: Bool
+    private let logEvery: Int?
     private var emittedInitialSummary = false
     private var frameSummaries: [GameAppVisualFrameSummary] = []
     private var diagnostics: [DiagnosticMessage] = []
     private var reportWritten = false
+    private var finalSummaryWritten = false
     private(set) var mtkViewAvailable = false
     private var drawableEverAvailable = false
     private var viewportWidth: Int
@@ -142,7 +152,9 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
     init(arguments: GameAppArguments, pipeline: GameAppPipeline, verbose: Bool) {
         self.arguments = arguments
         self.pipeline = pipeline
-        self.verbose = verbose
+        self.verboseFrameLogging = verbose
+        self.quiet = arguments.quiet
+        self.logEvery = arguments.logEvery
         self.viewportWidth = arguments.config.windowWidth
         self.viewportHeight = arguments.config.windowHeight
         super.init()
@@ -177,12 +189,15 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
             drawableAvailable: drawableAvailable,
             drawCallAttempted: true,
             drawCallSucceeded: drawableResult.success && drawableResult.presentedDrawable,
+            drawnDebugLines: drawableResult.drawnDebugLineCount,
+            drawnDebugLineVertices: drawableResult.drawnDebugLineVertexCount,
             extraDiagnostics: drawableResult.diagnostics.messages
         )
 
         log(frame: frame.frameResult, drawableResult: drawableResult)
 
         if let frameLimit = arguments.frameLimit, frameSummaries.count >= frameLimit {
+            logFinalSummaryIfNeeded(force: true)
             writeReportIfRequested()
             NSApplication.shared.terminate(nil)
         }
@@ -200,16 +215,65 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
         )
         diagnostics.append(contentsOf: diagnosticsReport.messages)
 
-        if verbose {
-            let camera = pipeline.debugCamera
+        switch intent {
+        case .toggleChunkBoundaries,
+             .toggleWorldAxes,
+             .toggleOriginMarker,
+             .toggleChunkCenters,
+             .toggleCentralChunkHighlight,
+             .toggleStreamingRadiusBounds:
             print(
-                "telluric-game-app debug camera: "
-                    + "mode \(camera.projectionMode.rawValue), "
-                    + "center \(camera.centerX),\(camera.centerZ), "
-                    + "halfZ \(camera.halfExtentZ), "
-                    + "diagnostics error \(diagnosticsReport.summary.errors)"
+                "telluric-game-app debug layers: "
+                    + pipeline.debugVisualLayers.enabledLayerNames.joined(separator: ",")
             )
+
+        case .zoomIn, .zoomOut, .pan(_, _), .reset:
+            if verboseFrameLogging && !quiet {
+                let camera = pipeline.debugCamera
+                print(
+                    "telluric-game-app debug camera: "
+                        + "mode \(camera.projectionMode.rawValue), "
+                        + "center \(camera.centerX),\(camera.centerZ), "
+                        + "halfZ \(camera.halfExtentZ), "
+                        + "diagnostics error \(diagnosticsReport.summary.errors)"
+                )
+            }
         }
+    }
+
+    func toggleVerboseFrameLogging() {
+        verboseFrameLogging.toggle()
+        if !quiet {
+            print("telluric-game-app verbose frame logging: \(verboseFrameLogging)")
+        }
+    }
+
+    func logFinalSummaryIfNeeded(force: Bool = false) {
+        guard !finalSummaryWritten else {
+            return
+        }
+
+        let summary = DiagnosticReport(messages: diagnostics).summary
+        guard force || !quiet || summary.warnings > 0 || summary.errors > 0 else {
+            return
+        }
+
+        finalSummaryWritten = true
+        guard let finalFrame = frameSummaries.last else {
+            return
+        }
+
+        print(
+            "telluric-game-app final: "
+                + "frames \(frameSummaries.count), "
+                + "debug lines \(finalFrame.debugLinesExtracted), "
+                + "drawn debug lines \(finalFrame.drawnDebugLines), "
+                + "drawable success \(finalFrame.drawCallSucceeded), "
+                + "layers \(finalFrame.debugVisualLayersEnabled.joined(separator: ",")), "
+                + "diagnostics info \(summary.infos) "
+                + "warning \(summary.warnings) "
+                + "error \(summary.errors)"
+        )
     }
 
     func runWithoutDrawableFallback() {
@@ -222,6 +286,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
                 drawableAvailable: false,
                 drawCallAttempted: false,
                 drawCallSucceeded: false,
+                drawnDebugLines: 0,
+                drawnDebugLineVertices: 0,
                 extraDiagnostics: []
             )
         }
@@ -270,6 +336,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
         drawableAvailable: Bool,
         drawCallAttempted: Bool,
         drawCallSucceeded: Bool,
+        drawnDebugLines: Int,
+        drawnDebugLineVertices: Int,
         extraDiagnostics: [DiagnosticMessage]
     ) {
         diagnostics.append(contentsOf: frame.diagnostics)
@@ -281,6 +349,8 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
             drawableAvailable: drawableAvailable,
             drawCallAttempted: drawCallAttempted,
             drawCallSucceeded: drawCallSucceeded,
+            drawnDebugLines: drawnDebugLines,
+            drawnDebugLineVertices: drawnDebugLineVertices,
             extraDiagnostics: extraDiagnostics
         ))
     }
@@ -291,7 +361,18 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
     }
 
     private func log(frame: GameAppFrameResult, drawableResult: MetalDrawableRenderResult) {
-        guard verbose || !emittedInitialSummary || !frame.success || !drawableResult.success else {
+        let frameNumber = Swift.max(frameSummaries.count, 1)
+        let hasIssues = !frame.success
+            || !drawableResult.success
+            || drawableResult.diagnostics.summary.warnings > 0
+            || drawableResult.diagnostics.summary.errors > 0
+        let shouldLogEvery = logEvery.map { frameNumber % $0 == 0 } ?? false
+        let shouldLog = hasIssues
+            || (!quiet && !emittedInitialSummary)
+            || (!quiet && verboseFrameLogging)
+            || (!quiet && shouldLogEvery)
+
+        guard shouldLog else {
             return
         }
 
@@ -316,12 +397,18 @@ private final class GameAppLoopDriver: NSObject, MTKViewDelegate {
 
 private final class GameAppMetalView: MTKView {
     var debugControlHandler: ((DebugCameraControlIntent) -> Void)?
+    var verboseToggleHandler: (() -> Void)?
 
     override var acceptsFirstResponder: Bool {
         true
     }
 
     override func keyDown(with event: NSEvent) {
+        if event.charactersIgnoringModifiers?.lowercased() == "v" {
+            verboseToggleHandler?()
+            return
+        }
+
         if let intent = Self.intent(for: event) {
             debugControlHandler?(intent)
             return
@@ -364,6 +451,18 @@ private final class GameAppMetalView: MTKView {
             return .zoomOut
         case "0", "r":
             return .reset
+        case "g":
+            return .toggleChunkBoundaries
+        case "x":
+            return .toggleWorldAxes
+        case "o":
+            return .toggleOriginMarker
+        case "c":
+            return .toggleChunkCenters
+        case "h":
+            return .toggleCentralChunkHighlight
+        case "b":
+            return .toggleStreamingRadiusBounds
         case "a":
             return .pan(deltaX: -1, deltaZ: 0)
         case "d":

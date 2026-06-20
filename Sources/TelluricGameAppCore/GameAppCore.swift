@@ -136,7 +136,7 @@ public struct DebugCameraConfig: Codable, Equatable, Sendable {
     }
 }
 
-/// Platform-neutral debug camera controls for app-shell visualization.
+/// Platform-neutral debug visualization controls for app-shell visualization.
 public enum DebugCameraControlIntent: Codable, Equatable, Sendable {
     /// Zooms toward the focus point.
     case zoomIn
@@ -149,6 +149,24 @@ public enum DebugCameraControlIntent: Codable, Equatable, Sendable {
 
     /// Refits the debug camera to the generated chunk grid.
     case reset
+
+    /// Toggles chunk boundary debug lines.
+    case toggleChunkBoundaries
+
+    /// Toggles world X/Z axis debug lines.
+    case toggleWorldAxes
+
+    /// Toggles the world-origin line marker.
+    case toggleOriginMarker
+
+    /// Toggles optional chunk center line crosses.
+    case toggleChunkCenters
+
+    /// Toggles the central chunk boundary accent.
+    case toggleCentralChunkHighlight
+
+    /// Toggles the streaming radius outline.
+    case toggleStreamingRadiusBounds
 }
 
 /// Debug-only camera state for top-down chunk-grid visualization.
@@ -308,6 +326,17 @@ public struct DebugCameraState: Codable, Equatable, Sendable {
                 state: Self.focused(appConfig: appConfig, cameraConfig: cameraConfig, viewportAspect: viewportAspect),
                 diagnostics: DiagnosticReport(messages: [])
             )
+
+        case .toggleChunkBoundaries,
+             .toggleWorldAxes,
+             .toggleOriginMarker,
+             .toggleChunkCenters,
+             .toggleCentralChunkHighlight,
+             .toggleStreamingRadiusBounds:
+            return DebugCameraValidationResult(
+                state: validState,
+                diagnostics: DiagnosticReport(messages: [])
+            )
         }
     }
 
@@ -452,6 +481,110 @@ public struct DebugCameraProjectionResult: Codable, Equatable, Sendable {
     }
 }
 
+/// Debug visual layers used by the app-shell render extraction path.
+public struct DebugVisualOptions: Codable, Equatable, Sendable {
+    /// Draws resident chunk boundary lines.
+    public let showChunkBoundaries: Bool
+
+    /// Draws world X/Z axes.
+    public let showWorldAxes: Bool
+
+    /// Draws a line cross at world origin.
+    public let showOriginMarker: Bool
+
+    /// Draws optional line crosses at resident chunk centers.
+    public let showChunkCenters: Bool
+
+    /// Draws accent lines around chunk `(0, 0)`.
+    public let showCentralChunkHighlight: Bool
+
+    /// Draws the current resident streaming footprint outline.
+    public let showStreamingRadiusBounds: Bool
+
+    /// Default readable debug visual layer set.
+    public static let `default` = DebugVisualOptions()
+
+    /// Creates debug visual options.
+    public init(
+        showChunkBoundaries: Bool = true,
+        showWorldAxes: Bool = true,
+        showOriginMarker: Bool = true,
+        showChunkCenters: Bool = false,
+        showCentralChunkHighlight: Bool = true,
+        showStreamingRadiusBounds: Bool = true
+    ) {
+        self.showChunkBoundaries = showChunkBoundaries
+        self.showWorldAxes = showWorldAxes
+        self.showOriginMarker = showOriginMarker
+        self.showChunkCenters = showChunkCenters
+        self.showCentralChunkHighlight = showCentralChunkHighlight
+        self.showStreamingRadiusBounds = showStreamingRadiusBounds
+    }
+
+    /// Ordered human-readable enabled layer names for diagnostics reports.
+    public var enabledLayerNames: [String] {
+        var names: [String] = []
+        if showChunkBoundaries {
+            names.append("chunkBoundaries")
+        }
+        if showWorldAxes {
+            names.append("worldAxes")
+        }
+        if showOriginMarker {
+            names.append("originMarker")
+        }
+        if showChunkCenters {
+            names.append("chunkCenters")
+        }
+        if showCentralChunkHighlight {
+            names.append("centralChunkHighlight")
+        }
+        if showStreamingRadiusBounds {
+            names.append("streamingRadiusBounds")
+        }
+        return names
+    }
+
+    /// Returns updated options by overriding selected fields.
+    public func with(
+        showChunkBoundaries: Bool? = nil,
+        showWorldAxes: Bool? = nil,
+        showOriginMarker: Bool? = nil,
+        showChunkCenters: Bool? = nil,
+        showCentralChunkHighlight: Bool? = nil,
+        showStreamingRadiusBounds: Bool? = nil
+    ) -> DebugVisualOptions {
+        DebugVisualOptions(
+            showChunkBoundaries: showChunkBoundaries ?? self.showChunkBoundaries,
+            showWorldAxes: showWorldAxes ?? self.showWorldAxes,
+            showOriginMarker: showOriginMarker ?? self.showOriginMarker,
+            showChunkCenters: showChunkCenters ?? self.showChunkCenters,
+            showCentralChunkHighlight: showCentralChunkHighlight ?? self.showCentralChunkHighlight,
+            showStreamingRadiusBounds: showStreamingRadiusBounds ?? self.showStreamingRadiusBounds
+        )
+    }
+
+    /// Applies a platform-neutral visual toggle.
+    public func applying(_ intent: DebugCameraControlIntent) -> DebugVisualOptions {
+        switch intent {
+        case .toggleChunkBoundaries:
+            return with(showChunkBoundaries: !showChunkBoundaries)
+        case .toggleWorldAxes:
+            return with(showWorldAxes: !showWorldAxes)
+        case .toggleOriginMarker:
+            return with(showOriginMarker: !showOriginMarker)
+        case .toggleChunkCenters:
+            return with(showChunkCenters: !showChunkCenters)
+        case .toggleCentralChunkHighlight:
+            return with(showCentralChunkHighlight: !showCentralChunkHighlight)
+        case .toggleStreamingRadiusBounds:
+            return with(showStreamingRadiusBounds: !showStreamingRadiusBounds)
+        case .zoomIn, .zoomOut, .pan(_, _), .reset:
+            return self
+        }
+    }
+}
+
 /// App-shell execution mode selected by command-line arguments.
 public enum GameAppRunMode: String, Codable, CaseIterable, Sendable {
     /// Runs the engine pipeline without creating a window.
@@ -484,8 +617,17 @@ public struct GameAppArguments: Equatable, Sendable {
     /// Optional repo-relative JSON diagnostics report path.
     public let diagnosticsReportPath: String?
 
+    /// Debug visual layer options used by render extraction.
+    public let debugVisualOptions: DebugVisualOptions
+
     /// Prints per-frame summary lines.
     public let verbose: Bool
+
+    /// Suppresses routine frame logs in app run mode.
+    public let quiet: Bool
+
+    /// Optional app run frame logging cadence.
+    public let logEvery: Int?
 
     /// True when help text was requested.
     public let help: Bool
@@ -498,7 +640,10 @@ public struct GameAppArguments: Equatable, Sendable {
         run: Bool = false,
         frameLimit: Int? = nil,
         diagnosticsReportPath: String? = nil,
+        debugVisualOptions: DebugVisualOptions = .default,
         verbose: Bool = false,
+        quiet: Bool = false,
+        logEvery: Int? = nil,
         help: Bool = false
     ) {
         self.config = config
@@ -507,7 +652,10 @@ public struct GameAppArguments: Equatable, Sendable {
         self.run = run
         self.frameLimit = frameLimit
         self.diagnosticsReportPath = diagnosticsReportPath
+        self.debugVisualOptions = debugVisualOptions
         self.verbose = verbose
+        self.quiet = quiet
+        self.logEvery = logEvery
         self.help = help
     }
 
@@ -558,7 +706,10 @@ public enum GameAppArgumentParser {
         var run = false
         var frameLimit: Int?
         var diagnosticsReportPath: String?
+        var debugVisualOptions = DebugVisualOptions.default
         var verbose = false
+        var quiet = false
+        var logEvery: Int?
         var help = false
 
         var index = 0
@@ -593,6 +744,52 @@ public enum GameAppArgumentParser {
 
             case "--verbose":
                 verbose = true
+                quiet = false
+                index += 1
+
+            case "--quiet":
+                quiet = true
+                verbose = false
+                index += 1
+
+            case "--log-every":
+                let value = try value(after: option, index: index, arguments: arguments)
+                guard let parsed = Int(value), parsed > 0 else {
+                    throw GameAppArgumentError.invalidValue(
+                        option: option,
+                        value: value,
+                        reason: "Expected a positive integer."
+                    )
+                }
+                logEvery = parsed
+                index += 2
+
+            case "--hide-grid":
+                debugVisualOptions = debugVisualOptions.with(showChunkBoundaries: false)
+                index += 1
+
+            case "--hide-axes":
+                debugVisualOptions = debugVisualOptions.with(showWorldAxes: false)
+                index += 1
+
+            case "--hide-origin":
+                debugVisualOptions = debugVisualOptions.with(showOriginMarker: false)
+                index += 1
+
+            case "--show-centers":
+                debugVisualOptions = debugVisualOptions.with(showChunkCenters: true)
+                index += 1
+
+            case "--hide-centers":
+                debugVisualOptions = debugVisualOptions.with(showChunkCenters: false)
+                index += 1
+
+            case "--hide-central-highlight":
+                debugVisualOptions = debugVisualOptions.with(showCentralChunkHighlight: false)
+                index += 1
+
+            case "--hide-radius-bounds":
+                debugVisualOptions = debugVisualOptions.with(showStreamingRadiusBounds: false)
                 index += 1
 
             case "--seed":
@@ -681,7 +878,10 @@ public enum GameAppArgumentParser {
             run: run,
             frameLimit: frameLimit,
             diagnosticsReportPath: diagnosticsReportPath,
+            debugVisualOptions: debugVisualOptions,
             verbose: verbose,
+            quiet: quiet,
+            logEvery: logEvery,
             help: help
         )
     }
@@ -700,7 +900,7 @@ public enum GameAppArgumentParser {
 public enum GameAppHelp {
     public static let text = """
     Usage:
-      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--dry-run|--smoke|--run] [--frames <Int>] [--diagnostics-report <path>] [--verbose]
+      swift run telluric-game-app [--seed <UInt64>] [--radius <Int>] [--chunk-size <Int>] [--vertical-scale <Float>] [--dry-run|--smoke|--run] [--frames <Int>] [--diagnostics-report <path>] [--verbose|--quiet] [--log-every <Int>]
 
     Options:
       --seed <UInt64>           Root deterministic world seed. Defaults to 1.
@@ -713,7 +913,16 @@ public enum GameAppHelp {
       --frames <Int>           Positive bounded frame count. Defaults to 1 for dry-run/smoke; app run is unbounded unless set.
       --diagnostics-report <path>
                                 Write a repo-relative JSON diagnostics report.
-      --verbose                Print ordered frame hashes.
+      --verbose                Print every app-run frame summary.
+      --quiet                  Suppress routine app-run frame summaries.
+      --log-every <Int>        Print every Nth app-run frame summary.
+      --hide-grid              Hide resident chunk boundary debug lines.
+      --hide-axes              Hide world X/Z axis debug lines.
+      --hide-origin            Hide the world origin marker.
+      --show-centers           Show optional resident chunk center crosses.
+      --hide-centers           Hide resident chunk center crosses.
+      --hide-central-highlight Hide the chunk (0,0) accent boundary.
+      --hide-radius-bounds     Hide the resident streaming footprint outline.
       --help, -h               Show this help text.
     """
 }
@@ -761,6 +970,7 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
     public let preparedDebugLineCount: Int
     public let preparedDebugLineVertexCount: Int
     public let preparedDebugLineBufferByteLength: Int
+    public let debugVisualOptions: DebugVisualOptions
     public let debugCameraState: DebugCameraState
     public let debugProjection: MetalDebugLineProjection
     public let debugViewportWidth: Int
@@ -782,6 +992,7 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
         preparedDebugLineCount: Int,
         preparedDebugLineVertexCount: Int,
         preparedDebugLineBufferByteLength: Int,
+        debugVisualOptions: DebugVisualOptions,
         debugCameraState: DebugCameraState,
         debugProjection: MetalDebugLineProjection,
         debugViewportWidth: Int,
@@ -801,6 +1012,7 @@ public struct GameAppFrameResult: Codable, Equatable, Sendable {
         self.preparedDebugLineCount = preparedDebugLineCount
         self.preparedDebugLineVertexCount = preparedDebugLineVertexCount
         self.preparedDebugLineBufferByteLength = preparedDebugLineBufferByteLength
+        self.debugVisualOptions = debugVisualOptions
         self.debugCameraState = debugCameraState
         self.debugProjection = debugProjection
         self.debugViewportWidth = debugViewportWidth
@@ -852,6 +1064,8 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
     public let renderSnapshotHash: StableHash
     public let debugLinesExtracted: Int
     public let debugVerticesPrepared: Int
+    public let debugVisualOptions: DebugVisualOptions
+    public let debugVisualLayersEnabled: [String]
     public let debugProjectionMode: DebugProjectionMode
     public let debugCameraCenterX: Float
     public let debugCameraCenterZ: Float
@@ -864,6 +1078,8 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
     public let drawableAvailable: Bool
     public let drawCallAttempted: Bool
     public let drawCallSucceeded: Bool
+    public let drawnDebugLines: Int
+    public let drawnDebugLineVertices: Int
     public let diagnosticsSummary: DiagnosticSummary
     public let success: Bool
 
@@ -875,9 +1091,13 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
         drawableAvailable: Bool,
         drawCallAttempted: Bool,
         drawCallSucceeded: Bool,
+        drawnDebugLines: Int = 0,
+        drawnDebugLineVertices: Int = 0,
         extraDiagnostics: [DiagnosticMessage] = []
     ) {
         precondition(frameNumber >= 0, "frameNumber must be non-negative")
+        precondition(drawnDebugLines >= 0, "drawnDebugLines must be non-negative")
+        precondition(drawnDebugLineVertices >= 0, "drawnDebugLineVertices must be non-negative")
         let diagnostics = frameResult.diagnostics + extraDiagnostics
         let report = DiagnosticReport(messages: diagnostics)
 
@@ -888,6 +1108,8 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
         self.renderSnapshotHash = frameResult.renderSnapshotHash
         self.debugLinesExtracted = frameResult.preparedDebugLineCount
         self.debugVerticesPrepared = frameResult.preparedDebugLineVertexCount
+        self.debugVisualOptions = frameResult.debugVisualOptions
+        self.debugVisualLayersEnabled = frameResult.debugVisualOptions.enabledLayerNames
         self.debugProjectionMode = frameResult.debugCameraState.projectionMode
         self.debugCameraCenterX = frameResult.debugCameraState.centerX
         self.debugCameraCenterZ = frameResult.debugCameraState.centerZ
@@ -900,6 +1122,8 @@ public struct GameAppVisualFrameSummary: Codable, Equatable, Sendable {
         self.drawableAvailable = drawableAvailable
         self.drawCallAttempted = drawCallAttempted
         self.drawCallSucceeded = drawCallSucceeded
+        self.drawnDebugLines = drawnDebugLines
+        self.drawnDebugLineVertices = drawnDebugLineVertices
         self.diagnosticsSummary = report.summary
         self.success = frameResult.success && drawCallSucceeded == drawCallAttempted && !report.hasErrors
     }
@@ -922,6 +1146,10 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
     public let drawableAvailable: Bool
     public let debugLinesExtracted: Int
     public let debugVerticesPrepared: Int
+    public let drawnDebugLines: Int
+    public let drawnDebugLineVertices: Int
+    public let debugVisualOptions: DebugVisualOptions?
+    public let debugVisualLayersEnabled: [String]
     public let debugProjectionMode: DebugProjectionMode?
     public let debugCameraCenterX: Float?
     public let debugCameraCenterZ: Float?
@@ -933,6 +1161,7 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
     public let drawCallsAttempted: Int
     public let drawCallsSucceeded: Int
     public let diagnosticsSummary: DiagnosticSummary
+    public let firstWarningOrError: DiagnosticMessage?
     public let diagnostics: [DiagnosticMessage]
     public let frames: [GameAppVisualFrameSummary]
     public let success: Bool
@@ -966,6 +1195,10 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
         self.drawableAvailable = drawableAvailable
         self.debugLinesExtracted = frames.last?.debugLinesExtracted ?? 0
         self.debugVerticesPrepared = frames.last?.debugVerticesPrepared ?? 0
+        self.drawnDebugLines = frames.last?.drawnDebugLines ?? 0
+        self.drawnDebugLineVertices = frames.last?.drawnDebugLineVertices ?? 0
+        self.debugVisualOptions = frames.last?.debugVisualOptions
+        self.debugVisualLayersEnabled = frames.last?.debugVisualLayersEnabled ?? []
         self.debugProjectionMode = frames.last?.debugProjectionMode
         self.debugCameraCenterX = frames.last?.debugCameraCenterX
         self.debugCameraCenterZ = frames.last?.debugCameraCenterZ
@@ -977,6 +1210,9 @@ public struct GameAppDiagnosticsReport: Codable, Equatable, Sendable {
         self.drawCallsAttempted = frames.filter(\.drawCallAttempted).count
         self.drawCallsSucceeded = frames.filter(\.drawCallSucceeded).count
         self.diagnosticsSummary = diagnosticReport.summary
+        self.firstWarningOrError = diagnostics.first { message in
+            message.severity == .warning || message.severity == .error
+        }
         self.diagnostics = diagnostics
         self.frames = frames
         self.success = !diagnosticReport.hasErrors && frames.allSatisfy(\.success)
@@ -1062,17 +1298,19 @@ public struct GameAppPipeline: Sendable {
 
     private var session: GameSession
     private let extractor: RuntimeRenderExtractor
-    private let extractionConfig: RuntimeRenderExtractionConfig
+    private var extractionConfig: RuntimeRenderExtractionConfig
     private let metalBackend: MetalRenderBackend
     private let debugCameraConfig: DebugCameraConfig
     private var debugCameraState: DebugCameraState
+    private var debugVisualOptions: DebugVisualOptions
     private let controlledEntityID: EntityID
     private var nextTick: TickIndex
 
     /// Creates a validated app-shell pipeline.
     public init(
         config: GameAppConfig,
-        debugCameraConfig: DebugCameraConfig = .default
+        debugCameraConfig: DebugCameraConfig = .default,
+        debugVisualOptions: DebugVisualOptions = .default
     ) throws {
         let diagnostics = Self.configurationDiagnostics(config)
         guard !DiagnosticReport(messages: diagnostics).hasErrors else {
@@ -1082,7 +1320,7 @@ public struct GameAppPipeline: Sendable {
         self.config = config
         self.session = GameSession(config: Self.makeGameConfig(config))
         self.extractor = RuntimeRenderExtractor()
-        self.extractionConfig = Self.extractionConfig(config: config)
+        self.extractionConfig = Self.extractionConfig(config: config, visualOptions: debugVisualOptions)
         self.metalBackend = MetalRenderBackend(config: MetalRenderBackendConfig(label: "telluric.render.metal.game_app"))
         self.debugCameraConfig = debugCameraConfig
         self.debugCameraState = DebugCameraState.focused(
@@ -1090,6 +1328,7 @@ public struct GameAppPipeline: Sendable {
             cameraConfig: debugCameraConfig,
             viewportAspect: config.defaultViewportAspect
         )
+        self.debugVisualOptions = debugVisualOptions
         self.controlledEntityID = EntityID(index: 1)
         self.nextTick = .zero
     }
@@ -1109,6 +1348,11 @@ public struct GameAppPipeline: Sendable {
         debugCameraState
     }
 
+    /// Current app-shell debug visual layer options.
+    public var debugVisualLayers: DebugVisualOptions {
+        debugVisualOptions
+    }
+
     /// Current runtime snapshot before the next frame is stepped.
     public func snapshot() -> RuntimeSnapshot {
         session.snapshot()
@@ -1121,6 +1365,21 @@ public struct GameAppPipeline: Sendable {
         viewportWidth: Int? = nil,
         viewportHeight: Int? = nil
     ) -> DiagnosticReport {
+        switch intent {
+        case .toggleChunkBoundaries,
+             .toggleWorldAxes,
+             .toggleOriginMarker,
+             .toggleChunkCenters,
+             .toggleCentralChunkHighlight,
+             .toggleStreamingRadiusBounds:
+            debugVisualOptions = debugVisualOptions.applying(intent)
+            extractionConfig = Self.extractionConfig(config: config, visualOptions: debugVisualOptions)
+            return DiagnosticReport(messages: [])
+
+        case .zoomIn, .zoomOut, .pan(_, _), .reset:
+            break
+        }
+
         let aspect = Self.viewportAspect(
             width: viewportWidth ?? config.windowWidth,
             height: viewportHeight ?? config.windowHeight,
@@ -1193,6 +1452,7 @@ public struct GameAppPipeline: Sendable {
             preparedDebugLineCount: metalFrame.preparedDebugLineCount,
             preparedDebugLineVertexCount: metalFrame.preparedDebugLineVertexCount,
             preparedDebugLineBufferByteLength: metalFrame.preparedDebugLineBufferByteLength,
+            debugVisualOptions: debugVisualOptions,
             debugCameraState: projection.state,
             debugProjection: projection.projection,
             debugViewportWidth: projection.viewportWidth,
@@ -1329,7 +1589,7 @@ public struct GameAppPipeline: Sendable {
         )
     }
 
-    private static func extractionConfig(config: GameAppConfig) -> RuntimeRenderExtractionConfig {
+    private static func extractionConfig(config: GameAppConfig, visualOptions: DebugVisualOptions) -> RuntimeRenderExtractionConfig {
         RuntimeRenderExtractionConfig(
             camera: CameraSnapshot(
                 id: NamespaceID("render.camera.game_app"),
@@ -1345,10 +1605,15 @@ public struct GameAppPipeline: Sendable {
                 ),
                 aspectRatio: Float(config.windowWidth) / Float(config.windowHeight)
             ),
-            includeChunkBoundaryLines: true,
+            includeChunkBoundaryLines: visualOptions.showChunkBoundaries,
             includeChunkLabels: false,
             includeChunkCenterPoints: false,
-            boundaryColor: .white
+            includeWorldAxes: visualOptions.showWorldAxes,
+            includeOriginMarker: visualOptions.showOriginMarker,
+            includeChunkCenterCrosses: visualOptions.showChunkCenters,
+            includeCentralChunkHighlight: visualOptions.showCentralChunkHighlight,
+            includeStreamingRadiusBounds: visualOptions.showStreamingRadiusBounds,
+            boundaryColor: .debugChunkBoundary
         )
     }
 
@@ -1456,7 +1721,10 @@ public enum GameAppRuntime {
 
     /// Runs the app-shell pipeline without opening a window.
     public static func dryRun(arguments: GameAppArguments) throws -> GameAppDryRunResult {
-        var pipeline = try GameAppPipeline(config: arguments.config)
+        var pipeline = try GameAppPipeline(
+            config: arguments.config,
+            debugVisualOptions: arguments.debugVisualOptions
+        )
         var frames: [GameAppFrameResult] = []
         let frameCount = arguments.noWindowFrameCount
 
@@ -1524,6 +1792,7 @@ public enum GameAppRuntime {
             lines.append("final render hash: \(finalFrame.renderSnapshotHash)")
             lines.append("debug lines: \(finalFrame.preparedDebugLineCount)")
             lines.append("debug line vertices: \(finalFrame.preparedDebugLineVertexCount)")
+            lines.append("debug visual layers: \(finalFrame.debugVisualOptions.enabledLayerNames.joined(separator: ","))")
             lines.append("debug camera center: \(finalFrame.debugCameraState.centerX), \(finalFrame.debugCameraState.centerZ)")
             lines.append("debug camera half extent z: \(finalFrame.debugCameraState.halfExtentZ)")
             lines.append("debug projection half extent x: \(finalFrame.debugProjection.halfExtentX)")
