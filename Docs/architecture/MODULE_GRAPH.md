@@ -76,6 +76,7 @@ TelluricAssets -> TelluricCore, TelluricDiagnostics
 TelluricPersistence -> TelluricCore, TelluricDeterminism, TelluricSimulation, TelluricWorld, TelluricDiagnostics
 TelluricRuntime -> TelluricCore, TelluricDeterminism, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
 TelluricRender -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricAssets
+TelluricRenderExtraction -> TelluricCore, TelluricDiagnostics, TelluricMath, TelluricRender, TelluricRuntime, TelluricWorld
 ```
 
 `TelluricRender` is backend-independent. It must not import Metal or MetalKit.
@@ -95,6 +96,15 @@ Phase 8 implements `TelluricRender` as the renderer-independent contract layer:
 - it does not import runtime, render backends, platform UI, Metal, gameplay, or tools UI.
 
 See `Docs/architecture/RENDERING.md`.
+
+Phase 9 implements `TelluricRenderExtraction` as the backend-neutral bridge from runtime snapshots to render snapshots:
+
+- it consumes ordered `RuntimeSnapshot` chunk residency;
+- it emits chunk boundary debug lines, optional labels, and optional points;
+- it keeps `TelluricRuntime` independent from `TelluricRender`;
+- it does not import render backends, Metal, UI frameworks, gameplay, or tools UI.
+
+See `Docs/architecture/RENDER_EXTRACTION.md`.
 
 ### Tools CLI targets
 
@@ -145,5 +155,6 @@ Phase 0 architecture guards must fail if:
 - SwiftUI, AppKit, Metal, MetalKit, AVFoundation, CoreAudio, or GameplayKit are imported in Phase 0 sources;
 - deterministic/procedural modules use `random(in:)`, `UUID()`, or `Date()`;
 - engine modules import app, game, or tool modules.
+- low-level engine modules import `TelluricRenderExtraction`.
 
 Phase 4 also runs a tiny repo-local seed validator smoke check from `scripts/check-architecture-guards.sh`.

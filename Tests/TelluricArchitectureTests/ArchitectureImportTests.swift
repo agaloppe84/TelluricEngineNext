@@ -8,6 +8,7 @@ import TelluricECS
 import TelluricMath
 import TelluricPersistence
 import TelluricRender
+import TelluricRenderExtraction
 import TelluricRuntime
 import TelluricSeedValidatorCore
 import TelluricSimulation
@@ -52,6 +53,7 @@ final class ArchitectureImportTests: XCTestCase {
             "TelluricStreaming",
             "TelluricRuntime",
             "TelluricRender",
+            "TelluricRenderExtraction",
         ]
         let forbiddenTokens = [
             "random(in:",
@@ -62,6 +64,31 @@ final class ArchitectureImportTests: XCTestCase {
         for moduleName in moduleNames {
             let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
             try assertNoSwiftSourceLine(under: moduleURL, containsAny: forbiddenTokens)
+        }
+    }
+
+    func testEngineModulesDoNotImportRenderExtractionBridge() throws {
+        let root = try packageRoot()
+        let moduleNames = [
+            "TelluricCore",
+            "TelluricMath",
+            "TelluricDeterminism",
+            "TelluricDiagnostics",
+            "TelluricECS",
+            "TelluricSimulation",
+            "TelluricWorld",
+            "TelluricTerrain",
+            "TelluricBiomes",
+            "TelluricStreaming",
+            "TelluricAssets",
+            "TelluricPersistence",
+            "TelluricRuntime",
+            "TelluricRender",
+        ]
+
+        for moduleName in moduleNames {
+            let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
+            try assertNoSwiftSourceLine(under: moduleURL, containsAnyImportOf: ["TelluricRenderExtraction"])
         }
     }
 

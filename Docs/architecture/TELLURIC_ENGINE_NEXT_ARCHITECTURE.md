@@ -42,7 +42,7 @@ Subsystem names may remain:
 TelluricGameApp
   -> TelluricGame
   -> TelluricRuntime
-  -> TelluricSimulation / World / Assets / Render contracts
+  -> TelluricSimulation / World / Assets / Render extraction / Render contracts
   -> TelluricCore / Math / Determinism / Diagnostics
 
 TelluricTools
@@ -153,15 +153,19 @@ Phase 7 implements the first runtime behavior in `TelluricRuntime`: synchronous 
 
 ```text
 TelluricRender
+TelluricRenderExtraction
 ```
 
 Responsibilities:
 
 - `TelluricRender` defines backend-independent snapshots.
+- `TelluricRenderExtraction` bridges runtime snapshots into backend-neutral render snapshots without making runtime import render.
 
 World payloads must not contain GPU objects.
 
 Phase 8 implements renderer-independent render contracts in `TelluricRender`: neutral resource identifiers, camera snapshots, renderable instances, debug primitives, ordered render snapshots and stable render snapshot hashing.
+
+Phase 9 implements runtime render extraction in `TelluricRenderExtraction`: resident chunk debug boundaries, optional coordinate labels, optional center points and deterministic render snapshots.
 
 `TelluricRenderMetal` is the future Metal/MetalKit backend. It owns RenderGraph, pipelines, GPU resources and IVDS rendering when introduced, and is intentionally not created in Phase 0.
 
@@ -277,13 +281,14 @@ Procedural systems testable before rendering
 6. ECS / Simulation contracts
 7. Runtime behavior
 8. RenderSnapshot contracts
-9. Assets / AssetCooker behavior
-10. ReplayInspector behavior
-11. RenderMetal backend
-12. Runtime app thin
-13. Game layer
-14. WorldLab
-15. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
+9. Runtime render extraction
+10. Assets / AssetCooker behavior
+11. ReplayInspector behavior
+12. RenderMetal backend
+13. Runtime app thin
+14. Game layer
+15. WorldLab
+16. Advanced Terrain Forge / Motion Forge / Audio Forge / ML Bridge
 ```
 
 ## 8. No throwaway code policy

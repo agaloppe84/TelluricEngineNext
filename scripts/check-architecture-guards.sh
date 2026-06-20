@@ -25,6 +25,7 @@ if [ -d Sources ]; then
     TelluricPersistence
     TelluricRuntime
     TelluricRender
+    TelluricRenderExtraction
     TelluricSeedValidatorCore
     TelluricSeedValidator
     TelluricAssetCooker
@@ -80,6 +81,7 @@ if [ -d Sources ]; then
     Sources/TelluricStreaming
     Sources/TelluricRuntime
     Sources/TelluricRender
+    Sources/TelluricRenderExtraction
     Sources/TelluricSeedValidatorCore
   )
 
@@ -115,6 +117,32 @@ if [ -d Sources ]; then
     if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
       grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
       fail "$engine_dir imports app/game/tool modules"
+    fi
+  done
+
+  bridge_forbidden_import_dirs=(
+    Sources/TelluricCore
+    Sources/TelluricMath
+    Sources/TelluricDeterminism
+    Sources/TelluricDiagnostics
+    Sources/TelluricECS
+    Sources/TelluricSimulation
+    Sources/TelluricWorld
+    Sources/TelluricTerrain
+    Sources/TelluricBiomes
+    Sources/TelluricStreaming
+    Sources/TelluricAssets
+    Sources/TelluricPersistence
+    Sources/TelluricRuntime
+    Sources/TelluricRender
+  )
+
+  for bridge_forbidden_import_dir in "${bridge_forbidden_import_dirs[@]}"; do
+    [ -d "$bridge_forbidden_import_dir" ] || continue
+
+    if grep -R -n -E "^[[:space:]]*import[[:space:]]+TelluricRenderExtraction([[:space:]]|$)" "$bridge_forbidden_import_dir" --include="*.swift" >/dev/null 2>&1; then
+      grep -R -n -E "^[[:space:]]*import[[:space:]]+TelluricRenderExtraction([[:space:]]|$)" "$bridge_forbidden_import_dir" --include="*.swift" >&2
+      fail "$bridge_forbidden_import_dir imports the render extraction bridge"
     fi
   done
 fi

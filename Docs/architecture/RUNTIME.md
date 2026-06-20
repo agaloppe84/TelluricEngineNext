@@ -8,9 +8,9 @@ The runtime is the engine shell. It coordinates existing engine systems, but it 
 
 `TelluricRuntime` has no window, event loop, input device handling, SwiftUI, AppKit, Metal, or platform lifecycle code.
 
-Future apps will call into the runtime and provide engine-level inputs such as streaming observers and simulation input frames. The runtime returns deterministic snapshots and diagnostics that apps, tools, replay inspectors, and future render contracts can consume.
+Future apps will call into the runtime and provide engine-level inputs such as streaming observers and simulation input frames. The runtime returns deterministic snapshots and diagnostics that apps, tools, replay inspectors, and render extraction code can consume.
 
-Phase 8 adds renderer-independent `RenderSnapshot` contracts in `TelluricRender`. Runtime still does not import render contracts or build render snapshots; a future extraction layer can translate runtime/world/simulation state into render snapshots without reversing dependencies.
+Phase 8 adds renderer-independent `RenderSnapshot` contracts in `TelluricRender`. Phase 9 adds `TelluricRenderExtraction` as a separate bridge module that translates runtime snapshots into render snapshots without making runtime import render contracts.
 
 ## Runtime vs Gameplay
 
@@ -94,12 +94,19 @@ The hash includes ordered runtime config, runtime state, chunk records, simulati
 
 Runtime hashes use `StableHasher`, not Swift's built-in `Hasher`.
 
+## Runtime Render Extraction Boundary
+
+`TelluricRuntime` does not build `RenderSnapshot` values.
+
+`TelluricRenderExtraction` consumes runtime snapshots above the runtime boundary and produces backend-neutral render snapshots for debug visualization. This keeps runtime free of render, Metal, window, camera-control, and app concepts while still giving future clients a stable extraction path.
+
+Phase 9 extraction can visualize resident chunk footprints as flat debug lines and optional labels. Those primitives are not terrain meshes and do not change runtime state.
+
 ## Not Implemented In Phase 7
 
 Phase 7 does not implement:
 
 - rendering;
-- `RenderSnapshot`;
 - Metal or MetalKit;
 - mesh generation;
 - asset loading or cooking behavior;

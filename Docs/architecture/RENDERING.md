@@ -4,6 +4,8 @@ Phase 8 implements renderer-independent contracts in `TelluricRender`.
 
 This is not a renderer backend. It defines stable data that future backends, debug tools, editor tools, replay tools, and runtime visualization systems can consume.
 
+Phase 9 adds `TelluricRenderExtraction` as a separate bridge module. `TelluricRender` remains independent from runtime and backend modules.
+
 ## Contracts vs Backend
 
 `TelluricRender` owns CPU-side render contracts:
@@ -31,6 +33,8 @@ It must not own:
 Render contracts are value types. They describe what a backend may render, not how it allocates, uploads, schedules, culls, shades, presents, or profiles.
 
 `TelluricRender` depends on `TelluricCore`, `TelluricMath`, `TelluricDeterminism`, and the existing asset contract boundary. The dependency on `TelluricDeterminism` exists only so render snapshots can use `StableHasher`.
+
+`TelluricRenderExtraction` may consume `TelluricRuntime` and `TelluricRender` together to produce render snapshots from runtime snapshots. That bridge must not move into `TelluricRender`, because render contracts should remain reusable by future backends, tools, apps, and tests without taking a runtime dependency.
 
 ## Metal Boundary
 
@@ -87,6 +91,8 @@ Debug primitives are generic:
 
 They are backend-neutral and suitable for future chunk boundary, residency, simulation, or world-field visualization. They do not encode UI behavior, overlay controls, GPU resources, or tool-specific interaction state.
 
+Runtime render extraction uses these primitives for flat chunk footprint visualization. The lines are debug contracts only; they are not terrain meshes and do not carry backend material, shader, or GPU resource state.
+
 ## Render Hashing
 
 Render snapshots use:
@@ -108,8 +114,13 @@ Phase 8 does not implement:
 - RenderGraph;
 - mesh generation;
 - resource loading;
-- runtime render extraction;
 - app/window/view code;
 - gameplay cameras;
 - tools UI;
 - audio, motion, or ML.
+
+## Runtime Extraction Boundary
+
+Runtime render extraction is implemented in `TelluricRenderExtraction`, not `TelluricRender`.
+
+`TelluricRenderExtraction` is still backend-neutral and still future-compatible with Metal. It produces `RenderSnapshot` values using runtime residency data, but it does not allocate resources, load assets, generate meshes, create windows, or render frames.
