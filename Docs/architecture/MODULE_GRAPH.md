@@ -42,6 +42,11 @@ TelluricBiomes -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricWorld
 TelluricStreaming -> TelluricCore, TelluricMath, TelluricWorld, TelluricTerrain
 ```
 
+Phase 2 implements data, validation, hashing, and protocol contracts for `TelluricWorld`, `TelluricTerrain`, and `TelluricBiomes`. It does not implement generation algorithms or streaming behavior. See:
+
+- `Docs/architecture/WORLD_DATA_CONTRACTS.md`
+- `Docs/architecture/WORLD_GENERATION.md`
+
 ### Runtime and contract modules
 
 ```text
