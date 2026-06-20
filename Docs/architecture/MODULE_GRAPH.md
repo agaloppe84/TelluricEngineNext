@@ -21,6 +21,11 @@ TelluricDeterminism -> TelluricCore, TelluricMath
 TelluricDiagnostics -> TelluricCore
 ```
 
+Phase 1 implements the first real foundation contracts in these four targets. See:
+
+- `Docs/architecture/ENGINE_FOUNDATION.md`
+- `Docs/architecture/DETERMINISM.md`
+
 ### Simulation modules
 
 ```text
