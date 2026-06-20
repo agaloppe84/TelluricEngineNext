@@ -74,11 +74,19 @@ See `Docs/architecture/STREAMING.md`.
 ```text
 TelluricAssets -> TelluricCore, TelluricDiagnostics
 TelluricPersistence -> TelluricCore, TelluricDeterminism, TelluricSimulation, TelluricWorld, TelluricDiagnostics
-TelluricRuntime -> TelluricCore, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
+TelluricRuntime -> TelluricCore, TelluricDeterminism, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
 TelluricRender -> TelluricCore, TelluricMath, TelluricAssets
 ```
 
 `TelluricRender` is backend-independent. It must not import Metal or MetalKit.
+
+Phase 7 implements `TelluricRuntime` as the synchronous engine runtime shell:
+
+- it owns runtime config, runtime state, chunk residency records, runtime step inputs and results, runtime snapshots, and runtime hashing;
+- it composes the deterministic terrain+biome world generator, chunk streaming planner, and fixed-tick simulation world;
+- it remains app-free, gameplay-free, UI-free, renderer-free, and synchronous.
+
+See `Docs/architecture/RUNTIME.md`.
 
 ### Tools CLI targets
 

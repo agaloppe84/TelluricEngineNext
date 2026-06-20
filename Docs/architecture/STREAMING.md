@@ -14,6 +14,8 @@ observers + config + residency snapshot -> ChunkStreamingPlan
 
 Future runtime streaming will consume this plan and decide how to schedule terrain/biome generation, persistence reads, asset loading, cancellation, prioritization, and eviction. Those runtime behaviors are intentionally outside Phase 5.
 
+Phase 7 introduces the first runtime consumer of the plan. `TelluricRuntime` passes ordered runtime residency into the planner, generates requested chunks synchronously, keeps desired resident chunks, and evicts undesired chunks. The planner remains pure and does not mutate runtime state or generate data.
+
 ## Observer Coordinates
 
 `StreamingObserver` stores an integer world-cell position:

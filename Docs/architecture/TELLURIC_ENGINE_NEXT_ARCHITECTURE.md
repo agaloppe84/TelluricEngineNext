@@ -147,6 +147,8 @@ Responsibilities:
 - chunk residency;
 - save/delta layer.
 
+Phase 7 implements the first runtime behavior in `TelluricRuntime`: synchronous world generation composition, chunk streaming plan consumption, chunk residency, fixed-tick simulation stepping, deterministic runtime snapshots and diagnostics. It does not implement apps, gameplay, rendering, assets behavior, persistence behavior or async jobs.
+
 ### Rendering contracts and backend
 
 ```text

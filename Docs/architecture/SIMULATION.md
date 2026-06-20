@@ -103,6 +103,8 @@ TelluricECS
 
 Simulation must not import runtime, render, UI, Metal, game, tool UI, audio, motion, or ML modules.
 
+`TelluricRuntime` may depend on `TelluricSimulation` and call `SimulationWorld.step(...)`. The dependency remains one-way: simulation never imports runtime. Runtime reports simulation diagnostics and does not silently advance simulation state when an input frame is rejected.
+
 ## Not Implemented In Phase 6
 
 Phase 6 does not implement:
