@@ -28,6 +28,7 @@ if [ -d Sources ]; then
     TelluricRenderExtraction
     TelluricSeedValidatorCore
     TelluricSeedValidator
+    TelluricAssetCookerCore
     TelluricAssetCooker
     TelluricReplayInspector
   )
@@ -82,7 +83,9 @@ if [ -d Sources ]; then
     Sources/TelluricRuntime
     Sources/TelluricRender
     Sources/TelluricRenderExtraction
+    Sources/TelluricAssets
     Sources/TelluricSeedValidatorCore
+    Sources/TelluricAssetCookerCore
   )
 
   for deterministic_dir in "${deterministic_dirs[@]}"; do
@@ -114,8 +117,8 @@ if [ -d Sources ]; then
   for engine_dir in "${engine_dirs[@]}"; do
     [ -d "$engine_dir" ] || continue
 
-    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
-      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
+    if grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >/dev/null 2>&1; then
+      grep -R -n -E "^[[:space:]]*import[[:space:]]+(TelluricGame|TelluricGameApp|TelluricTools|TelluricSeedValidator|TelluricSeedValidatorCore|TelluricAssetCooker|TelluricAssetCookerCore|TelluricReplayInspector)([[:space:]]|$)" "$engine_dir" --include="*.swift" >&2
       fail "$engine_dir imports app/game/tool modules"
     fi
   done

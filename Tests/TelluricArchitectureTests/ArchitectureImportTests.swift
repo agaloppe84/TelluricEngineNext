@@ -1,4 +1,5 @@
 import Foundation
+import TelluricAssetCookerCore
 import TelluricAssets
 import TelluricBiomes
 import TelluricCore
@@ -89,6 +90,35 @@ final class ArchitectureImportTests: XCTestCase {
         for moduleName in moduleNames {
             let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
             try assertNoSwiftSourceLine(under: moduleURL, containsAnyImportOf: ["TelluricRenderExtraction"])
+        }
+    }
+
+    func testEngineModulesDoNotImportAssetCookerTargets() throws {
+        let root = try packageRoot()
+        let moduleNames = [
+            "TelluricCore",
+            "TelluricMath",
+            "TelluricDeterminism",
+            "TelluricDiagnostics",
+            "TelluricECS",
+            "TelluricSimulation",
+            "TelluricWorld",
+            "TelluricTerrain",
+            "TelluricBiomes",
+            "TelluricStreaming",
+            "TelluricAssets",
+            "TelluricPersistence",
+            "TelluricRuntime",
+            "TelluricRender",
+            "TelluricRenderExtraction",
+        ]
+
+        for moduleName in moduleNames {
+            let moduleURL = root.appendingPathComponent("Sources").appendingPathComponent(moduleName)
+            try assertNoSwiftSourceLine(
+                under: moduleURL,
+                containsAnyImportOf: ["TelluricAssetCooker", "TelluricAssetCookerCore"]
+            )
         }
     }
 

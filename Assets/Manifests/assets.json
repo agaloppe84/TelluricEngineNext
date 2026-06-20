@@ -1,0 +1,17 @@
+{
+  "entries" : [
+    {
+      "cookedPath" : "Assets/Cooked/debug/debug_mesh.mesh.cooked.json",
+      "id" : "debug.mesh.grid",
+      "kind" : "mesh",
+      "sourcePath" : "Assets/Source/debug/debug_mesh.mesh.json"
+    },
+    {
+      "cookedPath" : "Assets/Cooked/debug/debug_material.material.cooked.json",
+      "id" : "debug.material.grid",
+      "kind" : "material",
+      "sourcePath" : "Assets/Source/debug/debug_material.material.json"
+    }
+  ],
+  "version" : 1
+}

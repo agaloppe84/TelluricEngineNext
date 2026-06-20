@@ -99,6 +99,16 @@ Telluric.RenderSnapshot.v1
 
 Render determinism depends on ordered camera, resource ID, renderable instance, and debug primitive data. Render snapshots are backend-neutral and exclude GPU resources, command buffers, pipeline state, platform windows, process-local values, and unordered collection traversal.
 
+Phase 10 asset contracts and cooker reports add:
+
+```text
+Telluric.AssetManifest.v1
+Telluric.CookedAssetDescriptor.v1
+Telluric.AssetCookReport.v1
+```
+
+Asset determinism depends on ordered manifest entries, ordered cooked descriptors, stable asset IDs, stable source/cooked paths, ordered diagnostics, and explicit success state. Asset reports exclude timestamps, file modification times, process-local values, platform handles, and unordered collection traversal.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

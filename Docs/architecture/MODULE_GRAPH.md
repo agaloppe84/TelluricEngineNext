@@ -72,7 +72,7 @@ See `Docs/architecture/STREAMING.md`.
 ### Runtime and contract modules
 
 ```text
-TelluricAssets -> TelluricCore, TelluricDiagnostics
+TelluricAssets -> TelluricCore, TelluricDeterminism, TelluricDiagnostics
 TelluricPersistence -> TelluricCore, TelluricDeterminism, TelluricSimulation, TelluricWorld, TelluricDiagnostics
 TelluricRuntime -> TelluricCore, TelluricDeterminism, TelluricDiagnostics, TelluricAssets, TelluricSimulation, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricStreaming, TelluricPersistence
 TelluricRender -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricAssets
@@ -106,20 +106,33 @@ Phase 9 implements `TelluricRenderExtraction` as the backend-neutral bridge from
 
 See `Docs/architecture/RENDER_EXTRACTION.md`.
 
+Phase 10 implements `TelluricAssets` as the asset manifest contract layer:
+
+- it owns asset IDs, asset kinds, manifest versions, source/cooked paths, manifests, descriptors, registries, validation reports, and asset hashing;
+- it validates manifest path policy and duplicate IDs;
+- it depends on `TelluricDeterminism` only for stable manifest and descriptor hashes;
+- it does not load assets, decode files, create GPU resources, stream runtime assets, or import cooker targets.
+
+See `Docs/architecture/ASSETS.md`.
+
 ### Tools CLI targets
 
 ```text
 TelluricSeedValidator -> TelluricSeedValidatorCore
 TelluricSeedValidatorCore -> TelluricCore, TelluricDeterminism, TelluricWorld, TelluricTerrain, TelluricBiomes, TelluricDiagnostics
-TelluricAssetCooker -> TelluricAssets, TelluricDiagnostics
+TelluricAssetCooker -> TelluricAssetCookerCore
+TelluricAssetCookerCore -> TelluricAssets, TelluricCore, TelluricDeterminism, TelluricDiagnostics
 TelluricReplayInspector -> TelluricRuntime, TelluricSimulation, TelluricDiagnostics
 ```
 
 `TelluricSeedValidatorCore` is a testable tool-support target, not an engine module. Engine modules must not import it.
+`TelluricAssetCookerCore` is also a testable tool-support target, not an engine module. Engine modules must not import it.
 
 Phase 4 implements `telluric-seed-validator` as the first real CLI engine tool. It validates deterministic terrain+biome chunk generation over an ordered grid and writes deterministic JSON reports without app, UI, rendering, gameplay, or Metal dependencies.
 
-`TelluricAssetCooker` and `TelluricReplayInspector` remain command-line target boundaries only until their tool phases.
+Phase 10 implements `telluric-asset-cooker` as the first asset manifest validation/cooker CLI. It validates manifests and writes deterministic reports without pretending to convert unsupported asset kinds.
+
+`TelluricReplayInspector` remains a command-line target boundary only until its tool phase.
 
 ## 2. Deferred Targets
 
@@ -156,5 +169,6 @@ Phase 0 architecture guards must fail if:
 - deterministic/procedural modules use `random(in:)`, `UUID()`, or `Date()`;
 - engine modules import app, game, or tool modules.
 - low-level engine modules import `TelluricRenderExtraction`.
+- engine modules import `TelluricAssetCooker` or `TelluricAssetCookerCore`.
 
 Phase 4 also runs a tiny repo-local seed validator smoke check from `scripts/check-architecture-guards.sh`.

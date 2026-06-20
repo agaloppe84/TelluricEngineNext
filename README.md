@@ -43,3 +43,13 @@ swift run telluric-seed-validator --seed 12345 --radius 2 --chunk-size 32 --vert
 ```
 
 Use the repo-local scripts for normal validation. `./scripts/check-architecture-guards.sh` includes a tiny seed validator smoke run and writes its generated report under ignored `Tools/benchmarks/` output.
+
+## Asset cooker
+
+The asset cooker validates JSON asset manifests and writes deterministic reports:
+
+```sh
+swift run telluric-asset-cooker --manifest Assets/Manifests/assets.json --output Assets/Cooked --report Tools/benchmarks/asset_cook_report.json
+```
+
+Phase 10 produces validation reports and cooked descriptors only. It does not convert meshes, textures, materials, audio, motion, terrain recipes, or biome recipes yet. Use `--strict` to make unsupported conversions explicit errors.

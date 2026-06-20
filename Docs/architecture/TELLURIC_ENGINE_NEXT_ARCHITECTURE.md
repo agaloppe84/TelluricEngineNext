@@ -149,6 +149,8 @@ Responsibilities:
 
 Phase 7 implements the first runtime behavior in `TelluricRuntime`: synchronous world generation composition, chunk streaming plan consumption, chunk residency, fixed-tick simulation stepping, deterministic runtime snapshots and diagnostics. It does not implement apps, gameplay, rendering, assets behavior, persistence behavior or async jobs.
 
+Phase 10 implements the first asset behavior in `TelluricAssets`: JSON manifests, asset IDs, source/cooked paths, cooked descriptors, asset registries, validation reports, and stable asset hashes. It does not implement runtime asset streaming, GPU resources, conversion, editor UI, or gameplay assets.
+
 ### Rendering contracts and backend
 
 ```text
@@ -226,10 +228,11 @@ ML/RPG targets are not created in Phase 0.
 ```text
 TelluricSeedValidator
 TelluricAssetCooker
+TelluricAssetCookerCore
 TelluricReplayInspector
 ```
 
-These are command-line target boundaries only in Phase 0. They do not contain real validation, cooking, replay inspection, UI, or gameplay behavior yet.
+These are command-line target boundaries only in Phase 0. Phase 4 implements the seed validator. Phase 10 implements the asset cooker as a manifest validation and descriptor/report tool. Replay inspection remains future work.
 
 ## 5. Runtime loop
 

@@ -1,0 +1,6 @@
+{
+  "kind" : "material",
+  "name" : "debug_grid_material",
+  "schemaVersion" : 1,
+  "description" : "Small text fixture for asset manifest validation. This is not cooked material data."
+}
