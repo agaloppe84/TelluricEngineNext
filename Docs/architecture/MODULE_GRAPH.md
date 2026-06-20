@@ -39,7 +39,7 @@ TelluricSimulation -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricE
 TelluricWorld -> TelluricCore, TelluricMath, TelluricDeterminism
 TelluricTerrain -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricWorld
 TelluricBiomes -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricWorld, TelluricTerrain
-TelluricStreaming -> TelluricCore, TelluricMath, TelluricWorld, TelluricTerrain
+TelluricStreaming -> TelluricCore, TelluricMath, TelluricDeterminism, TelluricDiagnostics, TelluricWorld
 ```
 
 Phase 2 implements data, validation, hashing, and protocol contracts for `TelluricWorld`, `TelluricTerrain`, and `TelluricBiomes`. It does not implement generation algorithms or streaming behavior. See:
@@ -52,6 +52,15 @@ Phase 3 adds deterministic baseline generation while preserving dependency direc
 - `TelluricWorld` owns generic chunk orchestration and aggregate payload reports.
 - `TelluricTerrain` owns deterministic terrain generation.
 - `TelluricBiomes` owns deterministic biome resolving and the terrain+biome component adapter.
+
+Phase 5 implements `TelluricStreaming` as a pure deterministic chunk planning layer:
+
+- it converts integer observer positions to chunk coordinates;
+- it computes ordered request/keep/evict plans;
+- it hashes ordered plan contents;
+- it does not import terrain, biomes, rendering, runtime, gameplay, tools UI, or asset systems.
+
+See `Docs/architecture/STREAMING.md`.
 
 ### Runtime and contract modules
 

@@ -65,6 +65,14 @@ Telluric.SeedValidationReport.v1
 
 The report hash is derived from ordered configuration fields, chunk coordinates, per-chunk payload hashes, component hashes, success state, and ordered diagnostics. It excludes timestamps, process-local values, performance timing, and unordered container traversal.
 
+Phase 5 streaming plans add a planner hash domain:
+
+```text
+Telluric.ChunkStreamingPlan.v1
+```
+
+The plan hash is derived from ordered streaming config, observers, request/keep/evict arrays, diagnostics, and success state. `TelluricStreaming` may use lookup structures internally in future optimizations, but final plan output and hashing must stay explicitly ordered.
+
 ## Deterministic RNG
 
 `DeterministicRNG` is based on fixed-width integer arithmetic. It produces identical sequences for identical seeds and divergent sequences for different seeds with high probability.

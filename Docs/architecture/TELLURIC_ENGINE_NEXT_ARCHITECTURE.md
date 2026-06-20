@@ -269,10 +269,10 @@ Procedural systems testable before rendering
 2. World data contracts
 3. Terrain/Biome baseline implementation respecting final contracts
 4. Seed validator CLI behavior
-5. Simulation / ECS / Runtime behavior
-6. RenderSnapshot contracts
-7. Assets / AssetCooker behavior
-8. Streaming planner
+5. Chunk streaming planner
+6. Simulation / ECS / Runtime behavior
+7. RenderSnapshot contracts
+8. Assets / AssetCooker behavior
 9. ReplayInspector behavior
 10. RenderMetal backend
 11. Runtime app thin

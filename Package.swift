@@ -35,7 +35,7 @@ let package = Package(
         .target(name: "TelluricWorld", dependencies: ["TelluricCore", "TelluricMath", "TelluricDeterminism"]),
         .target(name: "TelluricTerrain", dependencies: ["TelluricCore", "TelluricMath", "TelluricDeterminism", "TelluricWorld"]),
         .target(name: "TelluricBiomes", dependencies: ["TelluricCore", "TelluricMath", "TelluricDeterminism", "TelluricWorld", "TelluricTerrain"]),
-        .target(name: "TelluricStreaming", dependencies: ["TelluricCore", "TelluricMath", "TelluricWorld", "TelluricTerrain"]),
+        .target(name: "TelluricStreaming", dependencies: ["TelluricCore", "TelluricMath", "TelluricDeterminism", "TelluricDiagnostics", "TelluricWorld"]),
 
         .target(name: "TelluricAssets", dependencies: ["TelluricCore", "TelluricDiagnostics"]),
         .target(name: "TelluricPersistence", dependencies: ["TelluricCore", "TelluricDeterminism", "TelluricSimulation", "TelluricWorld", "TelluricDiagnostics"]),
